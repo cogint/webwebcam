@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>peerjs caller</title>
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+</head>
+<body>
+<video autoplay playsinline muted></video>
+<br>
+
+<script>
+    let video = document.querySelector('video');
+
+    // Caller PeerID = 2ceef1a5-2145-43a6-8cba-235423af1411
+    const myId = '2ceef1a5-2145-43a6-8cba-235423af1411';
+    const remoteId = '2ceef1a5-2145-43a6-8cba-235423af1412';
+    let peer = new Peer(myId, {debug: 3});
+
+    const conn = peer.connect(remoteId);
+    conn.on('open', () => {
+        conn.send(`hi from ${myId}!`);
+    });
+
+    peer.on('disconnected', () => console.log("Peer disconnected"));
+
+    peer.on('open', id => {
+        console.log('My peer ID is: ' + id);
+        navigator.mediaDevices.getUserMedia({
+            video: {
+                width: {ideal: 1920},
+                height: {ideal: 1080},
+                facingMode: {ideal: "environment"}
+            }
+        })
+            .then(stream => {
+                video.srcObject = stream;
+                peer.call(remoteId, stream);
+            })
+            .catch(err => console.error(err.name + ": " + err.message));
+    });
+
+</script>
+</body>
+</html>

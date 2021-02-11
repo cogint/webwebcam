@@ -1,0 +1,20 @@
+{
+   "content_scripts": [ {
+      "js": [ "inject.js" ],
+      "matches": [ "http://*/*", "https://*/*" ],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_start"
+   } ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "manifest_version": 2,
+  "name": "PhoneCam",
+  "description": "Use your mobile phone as a webcam with WebRTC",
+  "version": "0.0.1",
+  "permissions": [
+    "http://*/"
+  ]
+}

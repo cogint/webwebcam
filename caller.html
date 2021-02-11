@@ -12,15 +12,11 @@
 <script>
     let video = document.querySelector('video');
 
-    // Caller PeerID = 2ceef1a5-2145-43a6-8cba-235423af1411
     const myId = '2ceef1a5-2145-43a6-8cba-235423af1411';
     const remoteId = '2ceef1a5-2145-43a6-8cba-235423af1412';
     let peer = new Peer(myId, {debug: 3});
 
     const conn = peer.connect(remoteId);
-    conn.on('open', () => {
-        conn.send(`hi from ${myId}!`);
-    });
 
     peer.on('disconnected', () => console.log("Peer disconnected"));
 

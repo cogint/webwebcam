@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>peerjs caller</title>
+    <title>PhoneCam - phone broadcast</title>
     <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
 </head>
 <body>
@@ -12,11 +12,11 @@
 <script>
     let video = document.querySelector('video');
 
-    const myId = '2ceef1a5-2145-43a6-8cba-235423af1411';
-    const remoteId = '2ceef1a5-2145-43a6-8cba-235423af1412';
-    let peer = new Peer(myId, {debug: 3});
+    const phoneId = '2ceef1a5-2145-43a6-8cba-235423af1411-phone';
+    const extId = '2ceef1a5-2145-43a6-8cba-235423af1411-ext';
+    let peer = new Peer(phoneId, {debug: 3});
 
-    const conn = peer.connect(remoteId);
+    const conn = peer.connect(extId);
 
     peer.on('disconnected', () => console.log("Peer disconnected"));
 
@@ -31,7 +31,7 @@
         })
             .then(stream => {
                 video.srcObject = stream;
-                peer.call(remoteId, stream);
+                peer.call(extId, stream);
             })
             .catch(err => console.error(err.name + ": " + err.message));
     });

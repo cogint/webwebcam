@@ -46,7 +46,7 @@
 
     window.localStream = localStream;
 
-    const myId = '2ceef1a5-2145-43a6-8cba-235423af1412';
+    const myId = '2ceef1a5-2145-43a6-8cba-235423af1411-viewer';
     let peer = new Peer( myId, {debug: 3});
 
     peer.on('connection', conn => conn.on('data', data => console.log(`Incoming data: ${data}`)));

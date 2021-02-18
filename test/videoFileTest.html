@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Set a file as media source</title>
+</head>
+<body>
+<video autoplay muted playsinline loop></video>
+<script>
+    //let video = document.getElementsByTagName('video')[0];
+    //let mediaSource = new MediaSource();
+    //video.src = URL.createObjectURL(mediaSource);
+    //video.src = "fallout-standby.mkv";
+
+    // ffmpeg -i fallout-standby.mp4 -c:v libx264 -profile:v main -level 3.2 -pix_fmt yuv420p -preset medium -tune zerolatency -flags +cgop+low_delay -movflags empty_moov+omit_tfhd_offset+frag_keyframe+default_base_moof+isml -c:a aac fallout-standby2.mp4
+
+/*
+    // https://docs.w3cub.com/dom/mediasource
+    let video = document.querySelector('video');
+
+    // Need to be specific for Blink regarding codecs
+    // ./mp4info frag_bunny.mp4 | grep Codec
+    let mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+
+    if ('MediaSource' in window && MediaSource.isTypeSupported(mimeCodec)) {
+        let mediaSource = new MediaSource();
+        video.src = URL.createObjectURL(mediaSource);
+        //let blob = fetch('frag_bunny.mp4').then(result=>result.blob);
+        //video.srcObject = open('frag_bunny.mp4');
+        mediaSource.addEventListener('sourceopen', open);
+    } else {
+        console.error('Unsupported MIME type or codec: ', mimeCodec);
+    }
+
+    async function open(url){
+        const blob = await fetch(url).then(result=>result.blob);
+        mediaSource.add
+    }
+
+    function sourceOpen() {
+        //console.log(this.readyState); // open
+        let mediaSource = this;
+        let sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
+        let myRequest = new Request('frag_bunny.mp4');
+        fetch(myRequest)
+            .then(response=>response.arrayBuffer())
+            .then(buffer=>sourceBuffer.appendBuffer(buffer));
+    }*/
+
+    let sourceVideo = document.createElement('video');
+    sourceVideo.src ="assets/please-standby.mp4";
+    //sourceVideo.src = chrome.runtime.getURL("assets/please-standby.mp4");
+    sourceVideo.muted = true;
+    sourceVideo.playsinline = true;
+    // sourceVideo.autoplay = true;
+    sourceVideo.loop = true;
+    sourceVideo.play();
+    // This won't work in Safari
+    console.log("standby video is playing");
+    let standbyStream = sourceVideo.captureStream();
+    console.log(standbyStream);
+    document.querySelector('video').srcObject = standbyStream;
+
+    sourceVideo.addEventListener('playing', ()=>{
+
+    });
+
+
+
+</script>
+</body>
+</html>

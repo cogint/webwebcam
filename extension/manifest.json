@@ -15,6 +15,6 @@
   "description": "Use your mobile phone as a webcam with WebRTC",
   "version": "0.0.1",
   "permissions": [
-    "http://*/"
+    "http://*/", "https://*/"
   ]
 }

@@ -3,7 +3,6 @@ const inject = '(' + function () {
         let phoneCamStream;
         let usePhoneCam = false;
         let localStreamId;
-        let standbyStream;
         const extId = '2ceef1a5-2145-43a6-8cba-235423af1411-ext';
 
         /*
@@ -12,15 +11,46 @@ const inject = '(' + function () {
         function logger(message) {
             window.postMessage(['phonecam', window.location.href, 'logger', message], '*');
             console.log(`phonecam: ${message}`);
-
         }
 
-        // test for standbyStream
-    /*
-        standbyStream = document.getElementById('standby').captureStream();
-        window.standbyStream = standbyStream;
-        console.log(standbyStream);
-*/
+        /*
+        * Canvas animation for standby screen
+        */
+        // ToDo: add stand-by audio?
+        function standbyStream(){
+            let canvas = document.createElement('canvas');
+            let ctx = canvas.getContext('2d');
+            canvas.width = 1280;
+            canvas.height = 720;
+
+            // source: https://codepen.io/tmrDevelops/pen/vOPZBv
+            let col = (x, y, r, g, b) => {
+                ctx.fillStyle = `rgb(${r}, ${g}, ${b}`;
+                ctx.fillRect(0, 0, 1280,720);
+                ctx.font = "100px Arial";
+                ctx.fillStyle = "rgb(225,225,225)";
+                ctx.fillText('phonecam not connected', 200, 300);
+            };
+
+            let R = (x, y, t) => Math.floor(192 + 64 * Math.cos((x * x - y * y) / 300 + t));
+            let G = (x, y, t) => Math.floor(192 + 64 * Math.sin((x * x * Math.cos(t / 4) + y * y * Math.sin(t / 3)) / 300));
+            let B = (x, y, t) => Math.floor(192 + 64 * Math.sin(5 * Math.sin(t / 9) + ((x - 100) * (x - 100) + (y - 100) * (y - 100)) / 1100));
+
+            let t = 0;
+
+            function colors() {
+                for (let x = 0; x <= 35; x++) {
+                    for (let y = 0; y <= 35; y++) {
+                        col(x, y, R(x, y, t), G(x, y, t), B(x, y, t));
+                    }
+                }
+                t = t + 0.120;
+            }
+
+            setInterval(()=>requestAnimationFrame(colors), 200);
+            return canvas.captureStream(5);
+        }
+
         /*
          * enumerateDevices shim
          */
@@ -80,22 +110,23 @@ const inject = '(' + function () {
             // ToDo: need to manage audio & video tracks separately, use addTracks
             if(JSON.stringify(constraints.audio).includes('phonecam')){
                 swapAudio = true;
+                constraints.audio = false;
             }
-            if(JSON.stringify(constraints.video).includes('phonecam'))
+            if(JSON.stringify(constraints.video).includes('phonecam')){
                 swapVideo = true;
+                constraints.video = false;
+            }
 
             if (swapAudio || swapVideo){
                 console.log(`phonecam selected`);
 
-                constraints = {
-                    video: swapVideo ? false : constraints.video,
-                    audio: swapAudio ? false : constraints.audio
-                };
-
                 console.log("updated constraints", constraints);
 
                 return origGetUserMedia(constraints).then(stream=> {
-                    //return usePhoneCam ? phoneCamStream : stream
+                    // Use the standby stream is phoneoCam is selected, but not active
+                    if(!phoneCamStream || phoneCamStream.getTracks().length === 0)
+                        phoneCamStream = standbyStream();
+
                     if (swapVideo) {
                         phoneCamStream.getVideoTracks()
                             .forEach(track => stream.addTrack(track));
@@ -104,17 +135,13 @@ const inject = '(' + function () {
                     if (swapAudio) {
                         phoneCamStream.getAudioTracks()
                             .forEach(track => stream.addTrack(track));
-
                     }
                     return stream
                 }, err=> Promise.reject(err))
             } else
+                // ToDo: shutdown the standby stream if it is running and phonecam not selected?
                 return origGetUserMedia(constraints)
         };
-
-        // shim addTrack
-        //   localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
-
 
         /*
          * Start peer.js code

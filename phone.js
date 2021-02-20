@@ -4,37 +4,47 @@ let videoBtn = document.querySelector('button');
 const phoneId = '2ceef1a5-2145-43a6-8cba-235423af1411-phone';
 const extId = '2ceef1a5-2145-43a6-8cba-235423af1411-ext';
 let peer = new Peer(phoneId, {debug: 3});
+let call;
 
 const conn = peer.connect(extId);
 
-let index = -1;
+conn.on('data', function(data) {
+        console.log('Received', data);
+});
 
-async function getMedia(videoDeviceId) {
+
+let facingMode = "user";
+
+async function getMedia() {
     try {
-        if (video.srcObject)
-            video.srcObject.getTracks().forEach(track => track.stop());
-
-        video.srcObject = await navigator.mediaDevices.getUserMedia({
+        return await navigator.mediaDevices.getUserMedia({
             video: {
                 width: {ideal: 1920},
                 height: {ideal: 1080},
-                deviceId: {exact: videoDeviceId}
+                facingMode: {ideal: facingMode}
             }
-        })
+        });
     } catch (e) {
-        console.error(e.name + ": " + e.message);
+        console.error(`${e.name}: ${e.message}`);
+        conn.send(`${e.name}: ${e.message}`);
     }
 }
 
 videoBtn.onclick = async () => {
-    let devices = await navigator.mediaDevices.enumerateDevices();
-    let videoDevices = devices.filter(device => device.kind === "videoinput");
+    if(facingMode==="environment")
+        facingMode="user";
+    else
+        facingMode = "environment";
 
-    index++;
-    if (index >= videoDevices.length)
-        index = 0;
-    await getMedia(videoDevices[index].deviceId);
-    console.log(`selected video device: ${videoDevices[index].label}`);
+    if (video.srcObject)
+        video.srcObject.getTracks().forEach(track => track.stop());
+
+    let newStream = await getMedia();
+    video.srcObject = newStream;
+    call.peerConnection.getSenders()[0].replaceTrack(newStream.getVideoTracks()[0]);
+
+    conn.send(`switch camera input to ${facingMode}`);
+
 };
 
 peer.on('disconnected', () => console.log("Peer disconnected"));
@@ -42,6 +52,8 @@ peer.on('disconnected', () => console.log("Peer disconnected"));
 peer.on('open', async id => {
     console.log('My peer ID is: ' + id);
 
-    stream = await getMedia();
-    //peer.call(extId, stream);
+    let stream = await getMedia();
+    video.srcObject = stream;
+    call = peer.call(extId, stream);
+
 });

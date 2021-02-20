@@ -3,39 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <title>PhoneCam - phone broadcast</title>
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
     <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.0/css/all.css" integrity="sha384-lZN37f5QGtY3VHgisS14W3ExzMWZxybE1SJSEsQp9S+oqd12jhcu+A56Ebc1zFSJ" crossorigin="anonymous">
+    <style>
+        video {
+            height: 100%;
+        }
+        .video-container{
+            position:relative;
+            display:inline-block;
+            height: 100vh;
+            overflow: auto;
+        }
+        .overlay {
+            position:absolute;
+            top:10%;
+            right:10%;
+            transform:translate(-50%,-50%);
+        }
+        button.btn {
+            color:#99ffff;
+        }
+    </style>
+
 </head>
 <body>
-<video autoplay playsinline muted></video>
-<br>
+<div class="container-fluid video-container">
+    <video autoplay playsinline muted></video>
+    <div class="overlay">
+        <button class="btn bg-transparent"><i class="fas fa-sync-alt fa-4x"></i></button>
+    </div>
+    <script src="phone.js"></script>
+</div>
 
-<script>
-    let video = document.querySelector('video');
-
-    const phoneId = '2ceef1a5-2145-43a6-8cba-235423af1411-phone';
-    const extId = '2ceef1a5-2145-43a6-8cba-235423af1411-ext';
-    let peer = new Peer(phoneId, {debug: 3});
-
-    const conn = peer.connect(extId);
-
-    peer.on('disconnected', () => console.log("Peer disconnected"));
-
-    peer.on('open', id => {
-        console.log('My peer ID is: ' + id);
-        navigator.mediaDevices.getUserMedia({
-            video: {
-                width: {ideal: 1920},
-                height: {ideal: 1080},
-                facingMode: {ideal: "environment"}
-            }
-        })
-            .then(stream => {
-                video.srcObject = stream;
-                peer.call(extId, stream);
-            })
-            .catch(err => console.error(err.name + ": " + err.message));
-    });
-
-</script>
 </body>
 </html>

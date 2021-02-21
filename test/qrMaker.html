@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>QR Code Maker</title>
+</head>
+<body>
+<script src="../assets/VanillaQR.min.js"></script>
+<script>
+
+    /**
+     * Function to produce UUID.
+     * See: http://stackoverflow.com/a/8809472
+     */
+    function generateUUID(){
+        let d = new Date().getTime();
+        if( window.performance && typeof window.performance.now === "function" ){
+            d += performance.now();
+        }
+        let uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
+            /[xy]/g,
+            function(c){
+                var r = (d + Math.random()*16)%16 | 0;
+                d = Math.floor(d/16);
+                return (c==='x' ? r : (r&0x3|0x8)).toString(16);
+            });
+        return uuid;
+    }
+
+    let UUID = generateUUID();
+    let qrValue = JSON.stringify({phonecam: UUID});
+
+    //source: https://github.com/chuckfairy/VanillaQR.js
+
+    //Create qr object
+    //Minus the url, these are the defaults
+    var qr = new VanillaQR({
+
+        url: qrValue,
+        size: 480,
+
+        colorLight: "#ffffff",
+        colorDark: "#000000",
+
+        //output to table or canvas
+        toTable: false,
+
+        //Ecc correction level 1-4
+        ecclevel: 1,
+
+        //Use a border or not
+        noBorder: false,
+
+        //Border size to output at
+        borderSize: 4
+
+    });
+
+    //Canvas or table is stored in domElement property
+    document.body.appendChild(qr.domElement);
+
+    //You can recreate the qr code to a new url like so
+    //If you have appended the domElement it will change
+    qr.url = qrValue;
+    qr.colorLight = "#0000000";
+    qr.colorDark = "#ffffff";
+    qr.init();
+
+</script>
+</body>
+</html>

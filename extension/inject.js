@@ -1,6 +1,6 @@
 const inject = '(' + function () {
 
-        let phoneCamStream;
+        let phoneCamStream = false;
         let usePhoneCam = false;
         let localStreamId;
         const extId = '2ceef1a5-2145-43a6-8cba-235423af1411-ext';
@@ -27,9 +27,9 @@ const inject = '(' + function () {
             let col = (x, y, r, g, b) => {
                 ctx.fillStyle = `rgb(${r}, ${g}, ${b}`;
                 ctx.fillRect(0, 0, 1280,720);
-                ctx.font = "100px Arial";
+                ctx.font = "92px Arial";
                 ctx.fillStyle = "rgb(225,225,225)";
-                ctx.fillText('phonecam not connected', 200, 300);
+                ctx.fillText('phonecam not connected', 150, 350);
             };
 
             let R = (x, y, t) => Math.floor(192 + 64 * Math.cos((x * x - y * y) / 300 + t));
@@ -147,15 +147,6 @@ const inject = '(' + function () {
          * Start peer.js code
          */
 
-        function replaceSources() {
-            let videos = document.getElementsByTagName('video');
-            [...videos].forEach(video => {
-                if (video.srcObject.id === localStreamId)
-                    video.srcObject = phoneCamStream;
-            })
-        }
-
-        // ToDo: make this part of a build pack
         fetch('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
             .then(resp => resp.text())
             .then(js => {

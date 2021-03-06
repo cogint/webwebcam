@@ -2,7 +2,9 @@ const inject = '(' + function () {
 
         let phoneCamStream = false;
         let usePhoneCam = false;
-        let localStreamId;
+        let connected = false;
+
+        //ToDo: change this
         const extId = '2ceef1a5-2145-43a6-8cba-235423af1411-ext';
 
         /*
@@ -50,6 +52,50 @@ const inject = '(' + function () {
             setInterval(()=>requestAnimationFrame(colors), 200);
             return canvas.captureStream(5);
         }
+
+        /*
+         * Start peer.js code
+         */
+
+
+        let peer, peerId;
+        async function connectPeer(){
+            //eval(peerjs);
+            if(!window.Peer){
+                // ToDo: check security on this
+                await fetch('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
+                    .then(resp => resp.text())
+                    .then(js => eval(js))
+                    .catch(console.error);
+            }
+
+            if(peer)
+                return;
+
+            if(!peerId){
+                // get the peerId
+            }
+
+
+            peer = new window.Peer(peerId, {debug: 3});
+            peer.on('connection', conn => conn.on('data', data => logger(`phonecam: incoming data: ${data}`)));
+            peer.on('disconnected', () => logger("peer disconnected"));
+            peer.on('open', id => logger(`phonecam: my peer ID is: ${id}`));
+
+            peer.on('call', call => {
+                call.on('stream', stream => {
+                    phoneCamStream = window.phoneCamStream = stream;
+                    usePhoneCam = true;
+                    logger("phonecam: stream established");
+                    window.postMessage(['phonecam', window.location.href, 'phoneCamStream', phoneCamStream.id], '*');
+                    //replaceSources();
+                });
+
+                call.answer();
+            });
+        }
+
+
 
         /*
          * enumerateDevices shim
@@ -102,7 +148,12 @@ const inject = '(' + function () {
         const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
         // Finding: you can't send a stream over postMessage
         navigator.mediaDevices.getUserMedia = function (constraints) {
+
             console.log("gum requested; original constraints", constraints);
+
+            // Load peerJS
+            // ToDo: move this to use only if phonecam is selected?
+            connectPeer();
 
             let swapAudio = false;
             let swapVideo = false;
@@ -123,7 +174,7 @@ const inject = '(' + function () {
                 console.log("updated constraints", constraints);
 
                 return origGetUserMedia(constraints).then(stream=> {
-                    // Use the standby stream is phoneoCam is selected, but not active
+                    // Use the standby stream is phoneCam is selected, but not active
                     if(!phoneCamStream || phoneCamStream.getTracks().length === 0)
                         phoneCamStream = standbyStream();
 
@@ -143,63 +194,48 @@ const inject = '(' + function () {
                 return origGetUserMedia(constraints)
         };
 
-        /*
-         * Start peer.js code
-         */
-
-        fetch('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
-            .then(resp => resp.text())
-            .then(js => {
-                eval(js);
-                let peer = new Peer(extId, {debug: 3});
-                peer.on('connection', conn => conn.on('data', data => logger(`phonecam: incoming data: ${data}`)));
-                peer.on('disconnected', () => logger("peer disconnected"));
-                peer.on('open', id => logger(`phonecam: my peer ID is: ${id}`));
-
-                peer.on('call', call => {
-                    call.on('stream', stream => {
-                        phoneCamStream = window.phoneCamStream = stream;
-                        usePhoneCam = true;
-                        logger("phonecam: stream established");
-                        window.postMessage(['phonecam', window.location.href, 'phoneCamStream', phoneCamStream.id], '*');
-                        //replaceSources();
-                    });
-
-                    call.answer();
-                });
-
-            })
-            .catch(console.error);
-
         window.addEventListener('beforeunload', () => {
             console.log('phonecam: Before unload handler');
             window.removeEventListener('message', {passive: true});
 
             if (streams.length > 0)
-                window.postMessage(['webrtcPresence', window.location.href, 'beforeunload'], '*');
+                window.postMessage(['phonecam', window.location.href, 'beforeunload'], '*');
 
         }, {passive: true})
     }
     + ')();';
 
-let channel = chrome.runtime.connect();
 
+
+let port = chrome.runtime.connect();
+
+
+// ToDo: this doesn't do anything
+chrome.runtime.onConnect.addListener( port=> {
+
+    port.postMessage({phonecam: "inject.js alive"});
+
+    // Check for messages from inject.js
+    port.onMessage.addListener( message => {
+        console.log(message);
+    });
+});
 
 // ToDo: debugging: "Uncaught Error: Extension context invalidated."
 // Reinsert inject.js on disconnect?
-channel.onDisconnect.addListener(function () {
+port.onDisconnect.addListener( ()=> {
     // clean up when content script gets disconnected
     console.log("chrome runtime disconnected");
     window.removeEventListener('message', {passive: true});
 });
 
 
-window.addEventListener('message', function (event) {
+window.addEventListener('message',  (event)=> {
     // if (typeof(event.data) === 'string') return;
     //if (channel == undefined || event.data[0] !== 'webrtcPresence') return;
     //else
-    if (channel && event.data[0] === 'phonecam')
-        channel.postMessage(event.data);
+    if (port && event.data[0] === 'phonecam')
+        port.postMessage(event.data);
 });
 
 

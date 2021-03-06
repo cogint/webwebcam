@@ -7,6 +7,7 @@
     <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <script src="https://kit.fontawesome.com/fe6dfab9d6.js" crossorigin="anonymous"></script>
+    <script src="https://cozmo.github.io/jsQR/jsQR.js"></script>
     <style>
         video {
             height: 100%;
@@ -26,15 +27,26 @@
         button.btn {
             color:#99ffff;
         }
+        button#scan{
+            color: azure;
+        }
     </style>
 
 </head>
 <body>
-<div class="container-fluid video-container">
-    <video autoplay playsinline muted></video>
-    <div class="overlay">
-        <button class="btn bg-transparent"><i class="fas fa-sync-alt fa-4x"></i></button>
+<div class="container-fluid">
+    <div id="scanPermission" hidden>
+        <span>Open the phonecam extension first</span>
+        <button id="scan" class="btn btn-primary">Scan QR code</button>
     </div>
+
+    <div class="video-container">
+        <video autoplay playsinline muted></video>
+        <div class="overlay">
+            <button id="camfacing" class="btn bg-transparent"><i class="fas fa-sync-alt fa-4x"></i></button>
+        </div>
+    </div>
+
     <script src="phone.js"></script>
 </div>
 

@@ -79,9 +79,11 @@ function updateId(newId){
     //const newId = generateId(20);
 
     idText.innerText = newId;
-    //localStorage.setItem("phonecam", JSON.stringify({peerId: newId}));
+    // localStorage.setItem("phonecam", JSON.stringify({peerId: newId}));
+    // chrome.storage.sync.set({phonecam: {'#3aa757'}, ()=>console.log("set storage"));
 
-    qr.url = JSON.stringify({phonecam: newId});
+
+        qr.url = JSON.stringify({phonecam: newId});
     qr.init();
 
 }
@@ -115,8 +117,8 @@ chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
 
 */
 
-let settings = JSON.parse(localStorage.getItem("phonecam"));
-console.log("settings", settings);
+/*let settings = JSON.parse(localStorage.getItem("phonecam"));
+console.log("settings", settings);*/
 
 if(settings && settings.peerId){
     peerId = settings.peerId;

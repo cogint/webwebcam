@@ -76,16 +76,9 @@ let qrInfo = document.getElementById('qrInfo');
 let peerId;
 
 function updateId(newId){
-    //const newId = generateId(20);
-
     idText.innerText = newId;
-    // localStorage.setItem("phonecam", JSON.stringify({peerId: newId}));
-    // chrome.storage.sync.set({phonecam: {'#3aa757'}, ()=>console.log("set storage"));
-
-
-        qr.url = JSON.stringify({phonecam: newId});
+    qr.url = JSON.stringify({phonecam: newId});
     qr.init();
-
 }
 
 
@@ -97,7 +90,7 @@ let port = chrome.extension.connect({
 });
 
 
-port.postMessage({phonecam: "popup.js alive"});
+port.postMessage({phonecam: "popup.js opened"});
 
 
 port.onMessage.addListener((msg) => {
@@ -117,8 +110,8 @@ chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
 
 */
 
-/*let settings = JSON.parse(localStorage.getItem("phonecam"));
-console.log("settings", settings);*/
+let settings = JSON.parse(localStorage.getItem("phonecam"));
+console.log("settings", settings);
 
 if(settings && settings.peerId){
     peerId = settings.peerId;

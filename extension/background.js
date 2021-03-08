@@ -16,6 +16,7 @@ function generateId(length) {
 }
 
 let peerId;
+let lastActiveTabId;
 
 function newId(){
     peerId = generateId(20);
@@ -33,24 +34,51 @@ if(settings && settings.peerId){
 }
 
 
-chrome.runtime.onConnect.addListener( port=> {
+// To communicate with popup.js
+chrome.runtime.onConnect.addListener(  port=> {
 
     port.postMessage({phonecam: "background.js alive"});
 
-    // Check for messages from inject.js
-    port.onMessage.addListener( message => {
-        console.log(message);
+    // Check for messages from popup.js
+    port.onMessage.addListener( async message => {
+        console.log("popup.js message", message);
         if(message.phonecam && message.phonecam === "idRequest"){
-            port.postMessage({phonecam: {newId: newId()}});
+            newId();
+            // send the new ID to popup.js
+            port.postMessage({phonecam: {newId: peerId}});
+            // send the new ID to the last tab
+            chrome.tabs.sendMessage(lastActiveTabId, {phonecam: {peerId: peerId}});
         }
     });
 });
 
-chrome.runtime.onSuspend.addListener( message =>
-    console.log("Extension port disconnected: " + message));
-
+// Communicate with content.js
 chrome.runtime.onMessage.addListener(
-    function (request, sender, sendResponse) {
-        console.log('Reached Background.js');
-        console.log('onMessage', request, sender, sendResponse)
+     (request, sender, sendResponse) => {
+        console.log(`content.js message from tabId: ${sender.tab.id}`, request);
+        if(request.phonecam.message === 'newId'){
+            lastActiveTabId = sender.tab.id;
+            sendResponse({phonecam: {peerId: peerId}});
+
+        }
+        /*
+        else if(request.phonecam.message === 'active'){
+            lastActiveTabId = sender.tab.id;
+            sendResponse(`ack to tabId ${lastActiveTabId}`);
+        }*/
     });
+
+chrome.runtime.onSuspend.addListener( () =>
+    console.log("Extension port disconnected"));
+
+/*
+chrome.tabs.query({active:true, currentWindow: false}, tabs=>{
+    console.log(tabs);
+    chrome.tabs.sendMessage(tabs[0].id, {message: "hello from background.js"}, response=>{
+        console.log(response);
+    })
+});*/
+
+// let tabs = chrome.tabs.connect();
+// tabs.postMessage({joke: "Knock knock"});
+

@@ -1,14 +1,24 @@
+// ToDo: turn this back into an anonymous function
+
 let phoneCamStream = false;
 let usePhoneCam = false;
 let connected = false;
+let standbyActive = false;
 
 
 /*
  * helper function
  */
 function logger(message) {
-    window.postMessage(['phonecam', window.location.href, 'logger', message], '*');
-    console.log(`phonecam: ${message}`);
+    //window.postMessage(['phonecam', window.location.href, 'logger', message], '*');
+    document.dispatchEvent(new CustomEvent('phonecam-inject', {
+        detail: {
+            // sourceUrl: window.location.href,
+            entity: 'inject.js',
+            logger: message
+        }
+    }));
+    // console.log('phonecam: ', message);
 }
 
 /*
@@ -57,7 +67,11 @@ function standbyStream() {
 
 let peer, peerId;
 
+
 async function connectPeer() {
+    // logger(`connectPeer called. peerId is ${peerId}`);
+    // document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'active'}}));
+
     //eval(peerjs);
     if (!window.Peer) {
         // ToDo: bundle this
@@ -67,31 +81,70 @@ async function connectPeer() {
             .catch(console.error);
     }
 
-    if (peer)
-        return;
+    if (peer){
+        logger("peer already established");
+        return
+    }
 
     if (!peerId) {
-        //ToDo: change this
-        //const extId = '2ceef1a5-2145-43a6-8cba-235423af1411-ext';
+        // ToDo: prevent multiple dispatches before a response
+        document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'getId'}}));
+        return;
     }
 
 
-    peer = new window.Peer(peerId, {debug: 3});
+    /*
+    peer = new window.Peer(`${peerId}-page`, {debug: 3});
     peer.on('connection', conn => conn.on('data', data => logger(`phonecam: incoming data: ${data}`)));
     peer.on('disconnected', () => logger("peer disconnected"));
     peer.on('open', id => logger(`phonecam: my peer ID is: ${id}`));
 
     peer.on('call', call => {
         call.on('stream', stream => {
-            phoneCamStream = window.phoneCamStream = stream;
-            usePhoneCam = true;
-            logger("phonecam: stream established");
-            window.postMessage(['phonecam', window.location.href, 'phoneCamStream', phoneCamStream.id], '*');
-            //replaceSources();
+            if (!phoneCamStream)
+                phoneCamStream = window.phoneCamStream = stream;
+            else if(phoneCamStream.getTracks().length > 0){
+                phoneCamStream.getTracks().forEach(track=>track.stop());
+                // stream.getTracks().forEach(track=>phoneCamStream.addTrack(track));
+                phoneCamStream = stream;
+            }
+
+            logger(`phonecam: stream established with streamId: ${phoneCamStream.id}`);
         });
 
         call.answer();
     });
+    */
+
+    peer = new window.Peer(`${peerId}-page`, {debug: 3});
+    peer.on('open',  id=> console.log(`My peer ID is ${id}. Waiting for call`));
+
+    peer.on('connection', conn => {
+        conn.on('data', data => console.log(`Incoming data: ${data}`))
+    });
+    peer.on('disconnected', ()=>console.log("Peer disconnected"));
+
+    peer.on('call', call=>{
+        call.on('stream', stream=>{
+            console.log("Got stream, switching source");
+            if(phoneCamStream.getTracks().length > 0){
+                console.log("phoneCamStream already had tracks");
+                phoneCamStream.getTracks().forEach(track=>track.stop());
+                // stream.getTracks().forEach(track=>phoneCamStream.addTrack(track));
+            }
+            phoneCamStream = window.phoneCamStream = stream;
+
+
+            // Stream on is not a function
+            // stream.on('close', ()=> "Peer stream stopped");
+            // stream.on('error', err=>console.error(err));
+
+        });
+        console.log("Answering incoming call");
+        call.answer();
+    });
+
+
 }
 
 
@@ -122,6 +175,9 @@ navigator.mediaDevices.enumerateDevices = function () {
                 devices.push(fakeDevice);
             });
 
+            // ToDo: should I connect here?
+            connectPeer();
+
             return devices
         }
         //}, err => Promise.reject(err)
@@ -129,14 +185,7 @@ navigator.mediaDevices.enumerateDevices = function () {
 };
 
 
-// https://stackoverflow.com/questions/42462773/mock-navigator-mediadevices-enumeratedevices
-/*
-navigator.mediaDevices.enumerateDevices = function () {
-    return new Promise((res, rej) => {
-        res([fakeDevice])
-    })
-};
-*/
+// ToDo: respond here - https://stackoverflow.com/questions/42462773/mock-navigator-mediadevices-enumeratedevices
 
 
 /*
@@ -145,13 +194,13 @@ navigator.mediaDevices.enumerateDevices = function () {
 
 const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 // Finding: you can't send a stream over postMessage
-navigator.mediaDevices.getUserMedia = function (constraints) {
+navigator.mediaDevices.getUserMedia = async function (constraints) {
 
-    console.log("gum requested; original constraints", constraints);
+    logger({note: "gum requested; original constraints:", constraints});
 
     // Load peerJS
     // ToDo: move this to use only if phonecam is selected?
-    connectPeer();
+    await connectPeer();
 
     let swapAudio = false;
     let swapVideo = false;
@@ -167,14 +216,16 @@ navigator.mediaDevices.getUserMedia = function (constraints) {
     }
 
     if (swapAudio || swapVideo) {
-        console.log(`phonecam selected`);
+        logger(`phonecam selected`);
 
-        console.log("updated constraints", constraints);
+        logger({note: "updated constraints:", constraints});
 
         return origGetUserMedia(constraints).then(stream => {
             // Use the standby stream is phoneCam is selected, but not active
-            if (!phoneCamStream || phoneCamStream.getTracks().length === 0)
+            if (!phoneCamStream || phoneCamStream.getTracks().length === 0){
                 phoneCamStream = standbyStream();
+                standbyActive = true;
+            }
 
             if (swapVideo) {
                 phoneCamStream.getVideoTracks()
@@ -193,16 +244,32 @@ navigator.mediaDevices.getUserMedia = function (constraints) {
 };
 
 window.addEventListener('beforeunload', () => {
-    console.log('phonecam: Before unload handler');
-    window.removeEventListener('message', {passive: true});
+//    window.removeEventListener('message', {passive: true});
 
-    if (streams.length > 0)
-        window.postMessage(['phonecam', window.location.href, 'beforeunload'], '*');
+    if (peer)
+        peer.destroy();
+    logger('beforeunload handler')
 
 }, {passive: true});
 
 
+document.addEventListener('phonecam-content', e => {
+    // console.log('phonecam-content', e.detail);
+    if (e.detail.peerId) {
+        const newId = e.detail.peerId;
+        if (peerId === newId) {
+            logger("peerId hasn't changed");
+            return
+        }
 
-
+        peerId = newId;
+        logger(`set new peerId: ${newId}`);
+        if (peer) {
+            peer.destroy();
+            peer = false;
+            connectPeer();
+        }
+    }
+});
 
 

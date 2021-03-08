@@ -23,8 +23,7 @@
   },
   "version": "0.0.1",
   "permissions": [
-    "http://*/", "https://*/",
-    "storage",
+    "http://*/", "https://*/"
   ],
   "web_accessible_resources": ["inject.js"]
 }

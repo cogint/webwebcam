@@ -3,10 +3,10 @@ let camFacing = document.querySelector('#camfacing');
 let openCamBtn = document.querySelector('#scan');
 let permissions = document.querySelector('#scanPermission');
 
-// const phoneId = '2ceef1a5-2145-43a6-8cba-235423af1411-phone';
-// const extId = '2ceef1a5-2145-43a6-8cba-235423af1411-ext';
 let conn;
 let facingMode = "user";
+const CALL_RETRY_PERIOD = 2*1000;
+
 
 async function getMedia() {
     try {
@@ -15,7 +15,7 @@ async function getMedia() {
                 width: {ideal: 1920},
                 height: {ideal: 1080},
                 facingMode: {ideal: facingMode},
-                deviceId: {exact: "a5acfaac553287b2f3d8404c35b73acc91f42785c74537da2da364b6c2bc9bfd"}
+                // deviceId: {ideal: "a5acfaac553287b2f3d8404c35b73acc91f42785c74537da2da364b6c2bc9bfd"}
             }
         });
     } catch (e) {
@@ -45,16 +45,50 @@ camFacing.onclick = async () => {
 
 function startPeer(peerId){
     let peer = new Peer(`${peerId}-phone`, {debug: 3});
-    let call;
-    let stream;
+    let connTimeout = false;
 
-    const conn = peer.connect(`${peerId}-ext`);
+    function startCall(){
+        // wait for a connection
+        conn.on('open',()=>{
+            //conn.on('data', data => console.log(`Incoming data: ${data}`))
+            console.log("connection established; starting call");
+            if (connTimeout) clearTimeout(connTimeout);
+            // conn.send({devices: devices}); //ToDo: didn't work
+            peer.call(`${peerId}-page`, video.srcObject);
+        });
+    }
 
-    conn.on('data', function(data) {
-        console.log('Received', data);
+
+    peer.on('open',  id=> {
+        console.log('My peer ID is: ' + id);
+        console.log("connected to peerServer. Trying to connect to peer");
+        conn = peer.connect(`${peerId}-page`);
+        // start the call if already playing
+        if(video.srcObject && video.srcObject.active)
+            startCall();
+        // otherwise wait for media to start- user might not accept permissions right away
+        else
+            video.onplay = ()=> startCall();
     });
 
+    peer.on('error', (err)=>{
+        if(err.type === 'peer-unavailable'){
+            console.log(`Peer wasn't available right now. Trying again in ${CALL_RETRY_PERIOD/1000} seconds`);
+            connTimeout = setTimeout(()=>{
+                if(!conn.open){
+                    console.log("trying to connect to peer again");
+                    conn = peer.connect(`${peerId}-page`);
+                }
+            }, 5*CALL_RETRY_PERIOD)
 
+        }
+        else
+            console.error(err)
+    });
+    peer.on('close', ()=>console.log("Peer closed"));
+    peer.on('disconnected', ()=>console.log("Peer disconnected"));
+
+    /*
     peer.on('disconnected', () => console.log("Peer disconnected"));
 
     peer.on('open', async id => {
@@ -62,8 +96,11 @@ function startPeer(peerId){
         //let stream = await getMedia();
         // video.srcObject = stream;
         stream = video.srcObject;
-        call = peer.call(`${peerId}-ext`, stream);
+        call = peer.call(`${peerId}-page`, stream);
     });
+     */
+
+
 
 }
 

@@ -34,7 +34,7 @@ document.addEventListener('phonecam-inject', async e => {
         return;
 
     let data = e.detail;
-    console.log("phonecam event data", data);
+    console.log("phonecam event data:", JSON.stringify(data));
 
     /*if(port)
         port.postMessage(data);*/
@@ -76,4 +76,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 let script = document.createElement('script');
 script.src = chrome.runtime.getURL('inject.js');
 script.onload = () => this.remove;
-(document.head || document.documentElement).appendChild(script);
+(document.body || document.documentElement).appendChild(script);
+
+/*
+// In case I want to use a video as a source
+let video = document.createElement('video');
+video.id = "standby";
+video.muted = true;
+video.autoplay = true;
+video.playsinline = true;
+video.loop = true;
+video.hidden = true;
+video.src = chrome.runtime.getURL('please-standby.mp4');
+(document.body || document.documentElement).appendChild(video);
+*/

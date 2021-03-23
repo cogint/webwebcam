@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Peer sender</title>
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+
+</head>
+<body>
+<video autoplay muted playsinline></video>
+<script>
+    const peerId = '2ceef1a5-2145-43a6-8cba-235423af1412';
+    let peer = new Peer( `${peerId}-sender`, {debug: 3});
+    let video =  document.querySelector('video');
+    let conn;
+    let connTimeout;
+    const CALL_RETRY_PERIOD = 2*1000;
+    let videoDeviceIds = [];
+
+    navigator.mediaDevices.enumerateDevices().then(d=>devices=d);
+    // filter only returned the 1st item
+    // navigator.mediaDevices.enumerateDevices().then(devices => devices.filter(device=>device.kind===('audioinput' || 'videoinput')));
+
+    navigator.mediaDevices.getUserMedia({video: {
+            width: {ideal: 1920},
+            height: {ideal: 1080}
+        }})
+        .then(stream=>video.srcObject=stream)
+        .catch(err=>console.error(err));
+
+
+
+    peer.on('open',  id=> {
+        console.log('My peer ID is: ' + id);
+        console.log("connected to peerServer. Trying to connect to peer");
+        conn = peer.connect(`${peerId}-viewer`);
+        // start the call if already playing
+        if(video.srcObject && video.srcObject.active)
+            startCall();
+        // otherwise wait for media to start- user might not accept permissions right away
+        else
+            video.onplay = ()=> startCall();
+    });
+
+    function startCall(){
+        // wait for a connection
+        conn.on('open',()=>{
+            //conn.on('data', data => console.log(`Incoming data: ${data}`))
+            console.log("connection established; starting call");
+            clearTimeout(connTimeout);
+            // conn.send({devices: devices}); //ToDo: didn't work
+            peer.call(`${peerId}-viewer`, video.srcObject);
+        });
+    }
+
+    // This is redundant with conn.on
+    peer.on('connection', () => {
+    });
+
+    peer.on('error', (err)=>{
+        if(err.type === 'peer-unavailable'){
+            console.log(`Peer wasn't available right now. Trying again in ${CALL_RETRY_PERIOD/1000} seconds`);
+            connTimeout = setTimeout(()=>{
+                console.log(`conn is open?: ${conn.open}`);
+                console.log(`peer is destroyed?: ${peer.destroyed}`);
+                if(!conn.open){
+                    console.log("trying to connect to peer again");
+                    conn = peer.connect(`${peerId}-viewer`);
+                }
+            }, 5*CALL_RETRY_PERIOD)
+
+        }
+        else
+            console.error(err)
+    });
+    peer.on('close', ()=>console.log("Peer closed"));
+    peer.on('disconnected', ()=>console.log("Peer disconnected"));
+
+
+
+    async function getMedia(constraints){
+        if (!constraints){
+            constraints = {video: {
+                width: {ideal: 1920},
+                height: {ideal: 1080},
+                deviceId: videoDeviceIds[0]
+            }
+        }}
+
+        try {
+            video.srcObject=await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {console.error(err)}
+    }
+
+
+    /*
+     * Change media source for easy testing
+     */
+
+
+    // note: this won't pick up new/removed devices
+    async function getVideoDeviceIds(){
+        /*navigator.mediaDevices.enumerateDevices()
+            .then(devices=>
+                videoDeviceIds = devices.filter(device=>device.kind==='videoinput').map(device=>device.deviceId)
+            );*/
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        return devices.filter(device=>device.kind==='videoinput').map(device=>device.deviceId)
+    }
+
+    getVideoDeviceIds();
+    console.log("video deviceIds", videoDeviceIds);
+
+
+    // ToDo: test this
+    // Reload the array if the device list changes
+    navigator.mediaDevices.ondevicechange = (e)=> {
+        // Check to see if there are any differences; otherwise don't mess with the order
+        let newList = getVideoDeviceIds();
+        //let currentId = videoDeviceIds[0];
+        if(newList.length > videoDeviceIds.length){
+            // remove anything that is missing
+            console.log("devices removed",videoDeviceIds.filter(id=>!newList.includes(id)));
+            videoDeviceIds = videoDeviceIds.filter(id=>newList.includes(id));
+            // Add new devices to the end
+            let newIds = newList.filter(id=>!videoDeviceIds.includes(id));
+            console.log("devices added",newIds);
+            videoDeviceIds.push(...newIds);
+            // videoDeviceIds = newList;
+        }
+
+
+
+        /*if(newList.length > videoDeviceIds)
+            videoDeviceIds = newList;*/
+    };
+
+
+    document.addEventListener('keydown', async e=>{
+
+        if(e.key==='n'){
+
+            //rotate the deviceId array
+            videoDeviceIds.push(videoDeviceIds.shift());
+            console.log(`Attempting to switch to videoDeviceId: ${videoDeviceIds[0]}`);
+
+        }
+    });
+
+
+</script>
+</body>
+</html>

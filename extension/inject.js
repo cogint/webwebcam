@@ -7,8 +7,6 @@ let standbyStream = false;
 let connected = false;
 let shimActive = false;
 let phonecamActive = true;
-let bindShims = true;
-
 
 /*
  * helper function
@@ -24,18 +22,6 @@ function logger(...message) {
     }));*/
     console.log('phonecam: ', message.length === 1 ? JSON.stringify(message[0]) : JSON.stringify(message));
 }
-
-
-/*
- * Check the URL for Teams
- * Teams binds to getUserMedia and enumerateDevices, so rebinding breaks it
- */
-if(window.location.host.includes("teams.microsoft.com")){
-    logger("Using Microsoft teams");
-    bindShims = false;
-}
-
-
 
 /*
 * Canvas animation for standby screen
@@ -65,9 +51,16 @@ function getStandbyStream(width = 1280, height = 720, framerate = 30) {
     let col = (x, y, r, g, b) => {
         ctx.fillStyle = `rgb(${r}, ${g}, ${b}`;
         ctx.fillRect(0, 0, 1280, 720);
-        ctx.font = "92px Arial";
+        ctx.font = "86px Arial";
         ctx.fillStyle = "rgb(225,225,225)";
-        ctx.fillText('phonecam not connected', 150, 350);
+        ctx.fillText('phonecam not connected', 150, 300);
+
+        // backwards text attempt
+        ctx.save();
+        ctx.scale(-1, 1); // Flip vertical
+        ctx.fillText('phonecam not connected', 165-1280, 400);
+        ctx.restore();
+
     };
 
     let R = (x, y, t) => Math.floor(192 + 64 * Math.cos((x * x - y * y) / 300 + t));
@@ -285,10 +278,6 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
 
 function shimGum() {
 
-    // ToDo: verify this / find a better way to see if the API is already bound to something other then mediaDevices
-    /*const origGetUserMedia = bindShims ?
-        navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) : navigator.mediaDevices.getUserMedia;*/
-
     const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async function (constraints) {
         let stream = await shimGetUserMedia(constraints, origGetUserMedia);
@@ -311,7 +300,6 @@ function shimGum() {
         }
     };
 
-    // navigator.webkitGetUserMedia.bind(navigator);
     navigator.webkitUserMedia = _webkitGetUserMedia;
     navigator.getUserMedia    = _webkitGetUserMedia;
 }
@@ -329,10 +317,6 @@ if(phonecamActive)
 // ToDo: don't bind to navigator.mediaDevices if url has teams??
 
 const origEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
-
-/*const origEnumerateDevices = bindShims ?
-    navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices) : navigator.mediaDevices.enumerateDevices;*/
-
 navigator.mediaDevices.enumerateDevices =  function () {
     // logger("navigator.mediaDevices.enumerateDevices called");
     if (!phonecamActive){
@@ -355,6 +339,7 @@ navigator.mediaDevices.enumerateDevices =  function () {
 
                 // InputDeviceInfo.prototype + getCapabilities override
 
+                // ToDo: adjust these capabilities based on the phoneCam stream?
                 let fakeVideoDevice = {
                     __proto__: InputDeviceInfo.prototype,
                     deviceId: "phonecam-video",
@@ -426,13 +411,11 @@ navigator.mediaDevices.enumerateDevices =  function () {
                 // ToDo: should I connect here?
                 // connectPeer();
 
-                // ToDo: is this needed?
-
+                // This is needed for Teams
                 if (!shimActive) {
                     logger("gUM not shimmed yet");
                     shimGum();
                 }
-
 
 
                 return devices

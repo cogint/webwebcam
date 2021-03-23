@@ -76,7 +76,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 let script = document.createElement('script');
 script.src = chrome.runtime.getURL('inject.js');
 script.onload = () => this.remove;
-(document.body || document.documentElement).appendChild(script);
+(document.head || document.documentElement).appendChild(script);
 
 /*
 // In case I want to use a video as a source

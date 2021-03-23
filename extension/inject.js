@@ -4,8 +4,10 @@
 
 let phoneCamStream = false;
 let standbyStream = false;
-let usePhoneCam = false;
 let connected = false;
+let shimActive = false;
+let phonecamActive = true;
+let bindShims = true;
 
 
 /*
@@ -23,6 +25,18 @@ function logger(...message) {
     console.log('phonecam: ', message.length === 1 ? JSON.stringify(message[0]) : JSON.stringify(message));
 }
 
+
+/*
+ * Check the URL for Teams
+ * Teams binds to getUserMedia and enumerateDevices, so rebinding breaks it
+ */
+if(window.location.host.includes("teams.microsoft.com")){
+    logger("Using Microsoft teams");
+    bindShims = false;
+}
+
+
+
 /*
 * Canvas animation for standby screen
 */
@@ -35,7 +49,7 @@ function getStandbyStream(width = 1280, height = 720, framerate = 30) {
     // ToDo: Check if this is active
     //  do I need to adjust the size & framerate too or just set it large and let
     //  apply constraints set it right? viewer.html experiment shows applyConstraints works
-    if (standbyStream.active){
+    if (standbyStream.active) {
         logger("standbyStream already active");
         return standbyStream;
     }
@@ -71,7 +85,7 @@ function getStandbyStream(width = 1280, height = 720, framerate = 30) {
         t = t + 0.120;
     }
 
-    setInterval(() => requestAnimationFrame(colors), 200);
+    setInterval(() => requestAnimationFrame(colors), 100);
 
     standbyStream = canvas.captureStream(framerate);
     return standbyStream
@@ -165,145 +179,15 @@ async function connectPeer() {
 }
 
 
-/*
- * enumerateDevices shim
- */
-const origEnumeratDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
-navigator.mediaDevices.enumerateDevices = function () {
-    return origEnumeratDevices().then(devices => {
-
-            logger("enumerateDevices shim");
-
-            // ToDo: verify proper behavior if there are no browser permissions
-            // Skip if there are no permissions
-            if (devices.filter(d => d.label !== "").length === 0) {
-                return devices
-            }
-
-            let noLabel = !devices.find(d => d.label !== "");
-            if (noLabel) logger("no device labels found");
-
-
-            // Approach 1:  InputDeviceInfo.prototype + getCapabilities override
-
-            let fakeVideoDevice = {
-                __proto__: InputDeviceInfo.prototype,
-                deviceId: "phonecam-video",
-                kind: "videoinput",
-                label: noLabel ? "" : "phonecam-video",
-                groupId: noLabel ? "" : "phonecam",
-                getCapabilities: () => {
-                    logger("fake video capabilities?");
-                    return {
-                        aspectRatio: {max: 1920, min: 0.000925925925925926},
-                        deviceId: noLabel ? "" : "phonecam-video",
-                        facingMode: [],
-                        frameRate: {max: 30, min: 1},
-                        groupId: noLabel ? "" : "phonecam",
-                        height: {max: 1080, min: 1},
-                        resizeMode: ["none", "crop-and-scale"],
-                        width: {max: 1920, min: 1}
-                    };
-                    return capabilities
-                },
-                toJSON: () => {
-                    return {
-                        __proto__: InputDeviceInfo.prototype,
-                        deviceId: "phonecam-video",
-                        kind: "videoinput",
-                        label: noLabel ? "" : "phonecam-video",
-                        groupId: noLabel ? "" : "phonecam",
-                    }
-                }
-
-            };
-
-
-            let fakeAudioDevice = {
-                __proto__: InputDeviceInfo.prototype,
-                deviceId: "phonecam-audio",
-                kind: noLabel ? "" : "audioinput",
-                label: "phonecam-audio",
-                groupId: noLabel ? "" : "phonecam",
-                getCapabilities: () => {
-                    logger("fake audio capabilities?");
-                    return {
-                        autoGainControl: [true, false],
-                        channelCount: {max: 2, min: 1},
-                        deviceId: noLabel ? "" : "phonecam-audio",
-                        echoCancellation: [true, false],
-                        groupId: noLabel ? "" : "phonecam",
-                        latency: {max: 0.002902, min: 0},
-                        noiseSuppression: [true, false],
-                        sampleRate: {max: 48000, min: 44100},
-                        sampleSize: {max: 16, min: 16}
-                    }
-                },
-                toJSON: () => {
-                    return {
-                        __proto__: InputDeviceInfo.prototype,
-                        deviceId: "phonecam-audio",
-                        kind: noLabel ? "" : "audioinput",
-                        label: "phonecam-audio",
-                        groupId: noLabel ? "" : "phonecam",
-                    }
-                }
-            };
-
-
-            devices.push(fakeVideoDevice);
-            devices.push(fakeAudioDevice);
-
-
-            // Approach 2: Copy, then override the default device since this doesn't work:
-            // fakedevice = new InputDeviceInfo // no constructor
-            // Result: FAIL -
-            // ToDo: grab the default devices
-
-            /*
-            let fakeAudioDevice = devices.find(d=>d.kind==="videoinput");
-            fakeAudioDevice.deviceId = "phonecam-audio-from-device6";
-            fakeAudioDevice.label = "phonecam-video";
-
-            devices.push(fakeAudioDevice);
-
-            let fakeVideoDevice = {};
-            fakeVideoDevice.__proto__ = devices[9].__proto__;
-            fakeVideoDevice.deviceId = "phonecam-video-from-device9";
-            fakeVideoDevice.label = "phonecam-video";
-            fakeVideoDevice.kind = "videoinput";
-            fakeVideoDevice.groupId = "phonecam";
-            devices.push(fakeVideoDevice);
-            */
-
-
-            // ToDo: should I connect here?
-            // connectPeer();
-
-            // logger('shimmed device list', devices);
-            // console.log(devices);
-            return devices
-        }, err => {
-            console.error('enumerateDevices shim error', err);
-            Promise.reject(err);
-        }
-    );
-};
-
-
 // ToDo: respond here - https://stackoverflow.com/questions/42462773/mock-navigator-mediadevices-enumeratedevices
 
 
 /*
  * getUserMedia shim
  */
-const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
-navigator.mediaDevices.getUserMedia = async function(constraints){
 
-//async function shimGetUserMedia(constraints) {
-
-    // logger("caller", caller ? caller : "caller not available");
+async function shimGetUserMedia(constraints, nativeGetUserMedia) {
 
     // Keep the original constraints so we can apply them to the phonecam track later
     const origConstraints = {...constraints};
@@ -323,24 +207,6 @@ navigator.mediaDevices.getUserMedia = async function(constraints){
         constraints.video = false;
     }
 
-    /*
-    function cleanConstraints(cs) {
-        // Remove constraints that don't apply to the peer source
-        if (constraints.video) {
-            delete cs.video.deviceId;
-            delete cs.video.groupId;
-            delete cs.video.facingMode;
-        }
-        if (constraints.audio) {
-            delete cs.audio.deviceId;
-            delete cs.audio.groupId;
-
-        }
-        console.log("new constraints sent to original gUM:", cs);
-        return cs
-    }
-     */
-
     // Add the fake stream(s) to the gUM stream
     async function addToStream(stream) {
         // Use the standby stream is phoneCam is selected, but not active
@@ -349,36 +215,7 @@ navigator.mediaDevices.getUserMedia = async function(constraints){
             phoneCamStream = await getStandbyStream();
         }
 
-        /*
         if (swapVideo) {
-            phoneCamStream.getVideoTracks()
-                .forEach(async track => {
-                    logger("origConstraints before applyConstraints", origConstraints);
-                    let videoTrackConstraints = {...origConstraints.video};
-                    delete videoTrackConstraints.deviceId;
-                    delete videoTrackConstraints.groupId;
-                    delete videoTrackConstraints.facingMode;
-                    logger(`Applying video track constraints:`, videoTrackConstraints);
-                    await track.applyConstraints(videoTrackConstraints);
-                    await stream.addTrack(track);
-                    // ToDo: see if I can set this label somehow
-                    logger(`Added video track ${track.label} to phoneCam stream ${stream.id}`);
-                });
-        }
-        if (swapAudio) {
-            phoneCamStream.getAudioTracks()
-                .forEach(async track => {
-                    let audioTrackConstraints = {...origConstraints.audio};
-                    delete audioTrackConstraints.deviceId;
-                    delete audioTrackConstraints.groupId;
-                    logger(`Applying audio track constraints:`, audioTrackConstraints);
-                    await track.applyConstraints(audioTrackConstraints);
-                    await stream.addTrack(track);
-                    logger(`Added audio track ${track.label} to phoneCam stream ${stream.id}`);
-                });
-        }
-         */
-        if(swapVideo){
             let videoTrack = phoneCamStream.getVideoTracks()[0];
             let videoTrackConstraints = {...origConstraints.video};
             delete videoTrackConstraints.deviceId;
@@ -389,7 +226,7 @@ navigator.mediaDevices.getUserMedia = async function(constraints){
             logger(`Added video track ${videoTrack.label} to phoneCam stream ${stream.id}`);
         }
 
-        if(swapAudio){
+        if (swapAudio) {
             let audioTrack = phoneCamStream.getAudioTracks()[0];
             let audioTrackConstraints = {...origConstraints.audio};
             delete audioTrackConstraints.deviceId;
@@ -432,43 +269,180 @@ navigator.mediaDevices.getUserMedia = async function(constraints){
             })
         } else {
             // If there is a non-phonecam media device, then return the original gUM ++
-            return origGetUserMedia(constraints).then(stream => {
+            return nativeGetUserMedia(constraints).then(stream => {
                 logger(`phonecam added to gUM stream ${stream.id}`);
                 // window.partialStream = stream;
                 return addToStream(stream);
-            }, err => Promise.reject(err)).catch(err=>console.log("phonecam: uncaught error", err));
+            }, err => Promise.reject(err)).catch(err => console.log("phonecam: uncaught error", err));
         }
 
     } else
     // Nothing to change
     // ToDo: shutdown the standby stream if it is running and phonecam not selected?
         logger("phonecam not selected, so just passing this along to gUM");
-        return origGetUserMedia(origConstraints) // was constraints
+    return nativeGetUserMedia(origConstraints) // was constraints
 }
 
+function shimGum() {
 
-// const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-// const origGetUserMedia = navigator.mediaDevices.getUserMedia.apply(navigator.mediaDevices, [...origEnumeratDevices.arguments, navigator.mediaDevices.getUserMedia]);
-// navigator.mediaDevices.getUserMedia = shimGetUserMedia;
+    // ToDo: verify this / find a better way to see if the API is already bound to something other then mediaDevices
+    /*const origGetUserMedia = bindShims ?
+        navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) : navigator.mediaDevices.getUserMedia;*/
+
+    const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async function (constraints) {
+        let stream = await shimGetUserMedia(constraints, origGetUserMedia);
+        logger("navigator.mediaDevices.getUserMedia shimmed");
+        shimActive = true;
+        return stream;
+    };
+
+
+    let _webkitGetUserMedia =  async function (constraints, onSuccess, onError) {
+        logger("navigator.webkitUserMedia called");
+        try {
+            let stream = await shimGetUserMedia(constraints, origGetUserMedia);
+            logger("navigator.webkitUserMedia should be shimmed");
+            shimActive = true;
+            return onSuccess(stream)
+        } catch (err) {
+            logger("_webkitGetUserMedia error!:", err);
+            return onError(err);
+        }
+    };
+
+    // navigator.webkitGetUserMedia.bind(navigator);
+    navigator.webkitUserMedia = _webkitGetUserMedia;
+    navigator.getUserMedia    = _webkitGetUserMedia;
+}
+
+if(phonecamActive)
+    shimGum();
 
 // Finding: you can't send a stream over postMessage
 
-// Testing for Teams
-// const orignDecodingInfo = navigator.mediaCapabilities.decodingInfo
 
 
-// JUST IN CASE
-let getUserMedia_ = function getUserMedia_(constraints, onSuccess, onError) {
-    logger('why are you using navigator.getUserMedia or navigator.webkitGetUserMedia');
-    navigator.webkitGetUserMedia(constraints, onSuccess, function (e) {
-        if (onError) {
-            logger('navigator.getUserMedia error', e);
-            onError(e);
-        }
-    });
+/*
+ * enumerateDevices shim
+ */
+// ToDo: don't bind to navigator.mediaDevices if url has teams??
+
+const origEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+
+/*const origEnumerateDevices = bindShims ?
+    navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices) : navigator.mediaDevices.enumerateDevices;*/
+
+navigator.mediaDevices.enumerateDevices =  function () {
+    // logger("navigator.mediaDevices.enumerateDevices called");
+    if (!phonecamActive){
+        return origEnumerateDevices().then(devices=>{return devices});
+    }
+    else
+        return origEnumerateDevices().then(devices => {
+
+                // logger("enumerateDevices shim");
+
+                // ToDo: verify proper behavior if there are no browser permissions
+                // Skip if there are no permissions
+                if (devices.filter(d => d.label !== "").length === 0) {
+                    return devices
+                }
+
+                let noLabel = !devices.find(d => d.label !== "");
+                if (noLabel) logger("no device labels found");
+
+
+                // InputDeviceInfo.prototype + getCapabilities override
+
+                let fakeVideoDevice = {
+                    __proto__: InputDeviceInfo.prototype,
+                    deviceId: "phonecam-video",
+                    kind: "videoinput",
+                    label: noLabel ? "" : "phonecam-video",
+                    groupId: noLabel ? "" : "phonecam",
+                    getCapabilities: () => {
+                        logger("fake video capabilities?");
+                        return {
+                            aspectRatio: {max: 1920, min: 0.000925925925925926},
+                            deviceId: noLabel ? "" : "phonecam-video",
+                            facingMode: [],
+                            frameRate: {max: 30, min: 1},
+                            groupId: noLabel ? "" : "phonecam",
+                            height: {max: 1080, min: 1},
+                            resizeMode: ["none", "crop-and-scale"],
+                            width: {max: 1920, min: 1}
+                        };
+                    },
+                    toJSON: () => {
+                        return {
+                            __proto__: InputDeviceInfo.prototype,
+                            deviceId: "phonecam-video",
+                            kind: "videoinput",
+                            label: noLabel ? "" : "phonecam-video",
+                            groupId: noLabel ? "" : "phonecam",
+                        }
+                    }
+
+                };
+
+
+                let fakeAudioDevice = {
+                    __proto__: InputDeviceInfo.prototype,
+                    deviceId: "phonecam-audio",
+                    kind: noLabel ? "" : "audioinput",
+                    label: "phonecam-audio",
+                    groupId: noLabel ? "" : "phonecam",
+                    getCapabilities: () => {
+                        logger("fake audio capabilities?");
+                        return {
+                            autoGainControl: [true, false],
+                            channelCount: {max: 2, min: 1},
+                            deviceId: noLabel ? "" : "phonecam-audio",
+                            echoCancellation: [true, false],
+                            groupId: noLabel ? "" : "phonecam",
+                            latency: {max: 0.002902, min: 0},
+                            noiseSuppression: [true, false],
+                            sampleRate: {max: 48000, min: 44100},
+                            sampleSize: {max: 16, min: 16}
+                        }
+                    },
+                    toJSON: () => {
+                        return {
+                            __proto__: InputDeviceInfo.prototype,
+                            deviceId: "phonecam-audio",
+                            kind: noLabel ? "" : "audioinput",
+                            label: "phonecam-audio",
+                            groupId: noLabel ? "" : "phonecam",
+                        }
+                    }
+                };
+
+
+                devices.push(fakeVideoDevice);
+                devices.push(fakeAudioDevice);
+
+
+                // ToDo: should I connect here?
+                // connectPeer();
+
+                // ToDo: is this needed?
+
+                if (!shimActive) {
+                    logger("gUM not shimmed yet");
+                    shimGum();
+                }
+
+
+
+                return devices
+            }, err => {
+                logger('enumerateDevices shim error', err);
+                Promise.reject(err);
+            }
+        );
 };
-navigator.getUserMedia = getUserMedia_.bind(navigator);
-navigator.webkitGetUserMedia = getUserMedia_.bind(navigator);
+
 
 /*
 const nativeGetSettings = MediaStreamTrack.prototype.getSettings;

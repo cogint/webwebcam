@@ -7,6 +7,7 @@ let standbyStream = false;
 let connected = false;
 let shimActive = false;
 let phonecamActive = true;
+let standbyVideo = false;
 
 /*
  * helper function
@@ -24,11 +25,48 @@ function logger(...message) {
 }
 
 /*
+ * Video for standby stream
+ */
+
+async function getStandbyStream(width = 1280, height = 720, framerate = 30){
+    // Keep just a single stand-by stream running
+    if (standbyStream.active) {
+        logger("standbyStream already active");
+        return standbyStream;
+    }
+
+    // Setup the video element
+    standbyVideo = document.createElement('video');
+    standbyVideo.id = "phonecamStandby";
+    standbyVideo.width = width;
+    standbyVideo.height = height;
+    standbyVideo.plansinline = true;
+    standbyVideo.muted = true;
+    standbyVideo.loop = true;
+    standbyVideo.src = "chrome-extension://ioljfbldffbenoomdbiainpdgdnmmoep/please-standby.mp4";
+    // document.body.appendChild(video);
+
+
+    standbyStream = standbyVideo.captureStream(framerate);
+
+    /*
+    standbyStream.onactive = ()=> {
+        console.log("after active", standbyStream);
+    };
+     */
+
+    await standbyVideo.play();
+    console.log("standby video playing", standbyStream);
+    return standbyStream
+
+}
+
+/*
 * Canvas animation for standby screen
 */
 
 // ToDo: add stand-by audio?
-function getStandbyStream(width = 1280, height = 720, framerate = 30) {
+function getStandbyStreamFromCanvas(width = 1280, height = 720, framerate = 30) {
 
     // if(!document.querySelector('canvas#phonecamStandby'))
 
@@ -206,6 +244,11 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
         console.log(`phonecam: current phoneCamStream`, phoneCamStream);
         if (!phoneCamStream || !phoneCamStream.active) {
             phoneCamStream = await getStandbyStream();
+
+            // ToDo: fix audio mute logic; might need a switch for standbyMedia
+            if(swapAudio)
+                // unmute the audio track
+                standbyVideo.muted = false;
         }
 
         if (swapVideo) {
@@ -229,10 +272,16 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
             logger(`Added video track ${audioTrack.label} to phoneCam stream ${stream.id}`);
         }
 
-        console.log("phonecam: addToStream is returning this stream ", stream);
-        console.log("phonecam: addToStream is returning these stream tracks ", stream.getTracks());
+        // console.log("phonecam: addToStream is returning this stream ", stream);
+        // console.log("phonecam: addToStream is returning these stream tracks ", stream.getTracks());
 
         return stream
+    }
+
+    // mute the audio if phonecam audio not needed
+    if(swapVideo && !swapAudio && standbyVideo){
+        logger("Phonecam standby audio not active, muting it");
+        standbyVideo.muted = true;
     }
 
 
@@ -264,7 +313,6 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
             // If there is a non-phonecam media device, then return the original gUM ++
             return nativeGetUserMedia(constraints).then(stream => {
                 logger(`phonecam added to gUM stream ${stream.id}`);
-                // window.partialStream = stream;
                 return addToStream(stream);
             }, err => Promise.reject(err)).catch(err => console.log("phonecam: uncaught error", err));
         }
@@ -272,6 +320,9 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
     } else
     // Nothing to change
     // ToDo: shutdown the standby stream if it is running and phonecam not selected?
+        //ToDo" this isn't working
+        if(standbyStream.active)
+            standbyVideo.muted = true;
         logger("phonecam not selected, so just passing this along to gUM");
     return nativeGetUserMedia(origConstraints) // was constraints
 }

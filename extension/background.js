@@ -15,47 +15,34 @@ function generateId(length) {
     return result;
 }
 
-let peerId;
 let lastActiveTabId;    //ToDo: what happens with multiple tabs?
 
-function newId(){
-    peerId = generateId(20);
+
+// Make this global for the pop-up
+window.newId = function newId(){
+    let peerId = generateId(20);
     localStorage.setItem("phonecam", JSON.stringify({peerId: peerId}));
+    // window.phonecamBackground.peerId = peerId;
+    window.peerId = peerId;
     console.log(`new peerId generated: ${peerId}`);
     return peerId
-}
+};
+
 
 let settings = JSON.parse(localStorage.getItem("phonecam"));
 if(settings && settings.peerId){
-    peerId = settings.peerId;
+    let peerId = settings.peerId;
+    window.peerId  = peerId;
     console.log(`peerId loaded: ${peerId}`);
 } else {
-
+    newId()
 }
 
-
-// To communicate with popup.js
+// To communicate with ???
 chrome.runtime.onConnect.addListener(  port=> {
-
     port.postMessage({phonecam: "background.js alive"});
-
-    // Check for messages from popup.js
-    port.onMessage.addListener( async message => {
-        console.log("popup.js message", message);
-        if(message.phonecam && message.phonecam === "idRequest"){
-            newId();
-            // send the new ID to popup.js
-            port.postMessage({phonecam: {newId: peerId}});
-            // send the new ID to the last tab
-            chrome.tabs.sendMessage(lastActiveTabId, {phonecam: {peerId: peerId}});
-        }
-
-        if(message.phonecam && message.phonecam.enabled){
-            chrome.tabs.sendMessage(lastActiveTabId, {phonecam: message.phonecam.enabled});
-        }
-
-        });
 });
+
 
 // Communicate with content.js
 chrome.runtime.onMessage.addListener(
@@ -63,7 +50,7 @@ chrome.runtime.onMessage.addListener(
         console.log(`content.js message from tabId: ${sender.tab.id}`, request);
         if(request.phonecam.message === 'newId'){
             lastActiveTabId = sender.tab.id;
-            sendResponse({phonecam: {peerId: peerId}});
+            sendResponse({phonecam: {peerId: window.peerId}});
 
         }
         /*

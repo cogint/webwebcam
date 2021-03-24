@@ -69,16 +69,18 @@ qr.init(); */
  */
 
 let button = document.getElementById('newQr');
-let idText = document.getElementById('peerId');
+let idText = document.getElementById('peerIdText');
 let enabledCheckbox = document.getElementById('enabledCheckbox');
 let qrInfo = document.getElementById('qrInfo');
 
+const backgroundWindow = chrome.extension.getBackgroundPage();
 
-let peerId;
+// let peerId;
 
-function updateId(newId){
-    idText.innerText = newId;
-    qr.url = JSON.stringify({phonecam: newId});
+function updateId(){
+    const id = backgroundWindow.newId();
+    idText.innerText = id;
+    qr.url = JSON.stringify({phonecam: id});
     qr.init();
 }
 
@@ -86,24 +88,6 @@ function updateId(newId){
 /**
  *  Communicate with the tabs
  */
-let port = chrome.extension.connect({
-    name: "PhoneCam"
-});
-
-
-port.postMessage({phonecam: "popup.js opened"});
-
-
-port.onMessage.addListener((msg) => {
-    console.log(msg);
-
-    if(msg.phonecam && msg.phonecam.newId){
-        updateId(msg.phonecam.newId)
-    }
-
-});
-
-
 /*
 chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
     port.postMessage({type: "request", id: tabs[0].id});
@@ -111,21 +95,7 @@ chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
 
 */
 
-let settings = JSON.parse(localStorage.getItem("phonecam"));
-console.log("settings", settings);
-
-if(settings && settings.peerId){
-    peerId = settings.peerId;
-    idText.innerText = peerId;
-    qr.url = JSON.stringify({phonecam: peerId});
-    qr.init();
-}
-else{
-    port.postMessage({phonecam: "idRequest"});
-}
-
-button.onclick = ()=>
-    port.postMessage({phonecam: "idRequest"});
+button.onclick = ()=> updateId();
 
 enabledCheckbox.onchange= (e)=>{
     let status = e.target.checked;
@@ -133,3 +103,13 @@ enabledCheckbox.onchange= (e)=>{
     console.log(`changed phonecam status to: ${status}`);
     port.postMessage({phonecam: {enabled: status}})
 };
+
+if(!backgroundWindow.peerId){
+    console.info("No peerId found on backgroundWindow.peerId");
+    updateId();
+} else {
+    idText.innerText = backgroundWindow.peerId;
+    qr.url = JSON.stringify({phonecam: backgroundWindow.peerId});
+    qr.init();
+}
+

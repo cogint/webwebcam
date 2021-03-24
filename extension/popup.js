@@ -73,6 +73,7 @@ let idText = document.getElementById('peerId');
 let enabledCheckbox = document.getElementById('enabledCheckbox');
 let qrInfo = document.getElementById('qrInfo');
 
+
 let peerId;
 
 function updateId(newId){
@@ -127,6 +128,8 @@ button.onclick = ()=>
     port.postMessage({phonecam: "idRequest"});
 
 enabledCheckbox.onchange= (e)=>{
-    qrInfo.hidden = !e.target.checked;
-    //ToDo: send message
+    let status = e.target.checked;
+    qrInfo.hidden = !status;
+    console.log(`changed phonecam status to: ${status}`);
+    port.postMessage({phonecam: {enabled: status}})
 };

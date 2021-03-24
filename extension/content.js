@@ -17,6 +17,13 @@ chrome.runtime.onMessage.addListener( (request, sender, sendResponse)=>{
         document.dispatchEvent(new CustomEvent('phonecam-content', {detail: {peerId: peerId}}));
 
     }
+
+    if(request.phonecam.enabled && sender.tab === undefined){
+        let status = request.phonecam.enabled;
+        console.log(`phonecam status changed to: ${status}`);
+        document.dispatchEvent(new CustomEvent('phonecam-content', {detail: {status: status}}));
+
+    }
 });
 
 // ToDo: debugging: "Uncaught Error: Extension context invalidated."

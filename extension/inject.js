@@ -43,7 +43,7 @@ async function getStandbyStream(width = 1280, height = 720, framerate = 30){
     standbyVideo.plansinline = true;
     standbyVideo.muted = true;
     standbyVideo.loop = true;
-    standbyVideo.src = "chrome-extension://ioljfbldffbenoomdbiainpdgdnmmoep/please-standby.mp4";
+    standbyVideo.src = "chrome-extension://ioljfbldffbenoomdbiainpdgdnmmoep/standby.mp4";
     // document.body.appendChild(video);
 
 
@@ -64,11 +64,8 @@ async function getStandbyStream(width = 1280, height = 720, framerate = 30){
 /*
 * Canvas animation for standby screen
 */
-
-// ToDo: add stand-by audio?
+/*
 function getStandbyStreamFromCanvas(width = 1280, height = 720, framerate = 30) {
-
-    // if(!document.querySelector('canvas#phonecamStandby'))
 
     // ToDo: Check if this is active
     //  do I need to adjust the size & framerate too or just set it large and let
@@ -121,6 +118,7 @@ function getStandbyStreamFromCanvas(width = 1280, height = 720, framerate = 30) 
     standbyStream = canvas.captureStream(framerate);
     return standbyStream
 }
+*/
 
 /*
  * Start peer.js code
@@ -137,7 +135,9 @@ async function connectPeer() {
     //eval(peerjs);
     if (!window.Peer) {
         // ToDo: bundle this
-        await fetch('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
+
+        //await fetch('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
+        await fetch('chrome-extension://ioljfbldffbenoomdbiainpdgdnmmoep/peerjs.min.js')
             .then(resp => resp.text())
             .then(js => eval(js))
             .catch(console.error);
@@ -216,7 +216,6 @@ async function connectPeer() {
 /*
  * getUserMedia shim
  */
-
 
 async function shimGetUserMedia(constraints, nativeGetUserMedia) {
 
@@ -365,8 +364,6 @@ if(phonecamActive)
 /*
  * enumerateDevices shim
  */
-// ToDo: don't bind to navigator.mediaDevices if url has teams??
-
 const origEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
 navigator.mediaDevices.enumerateDevices =  function () {
     // logger("navigator.mediaDevices.enumerateDevices called");

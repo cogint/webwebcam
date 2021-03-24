@@ -16,7 +16,7 @@ function generateId(length) {
 }
 
 let peerId;
-let lastActiveTabId;
+let lastActiveTabId;    //ToDo: what happens with multiple tabs?
 
 function newId(){
     peerId = generateId(20);
@@ -49,7 +49,12 @@ chrome.runtime.onConnect.addListener(  port=> {
             // send the new ID to the last tab
             chrome.tabs.sendMessage(lastActiveTabId, {phonecam: {peerId: peerId}});
         }
-    });
+
+        if(message.phonecam && message.phonecam.enabled){
+            chrome.tabs.sendMessage(lastActiveTabId, {phonecam: message.phonecam.enabled});
+        }
+
+        });
 });
 
 // Communicate with content.js

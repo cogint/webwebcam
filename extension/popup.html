@@ -67,13 +67,12 @@
 <body>
 <div class="container pt-4">
     <div class="row col">
-        <span>phonecam enabled:  </span>
+        <span> Enable phonecam: &nbsp &nbsp</span>
         <label class="switch">
-            <input id="enabledCheckbox" type="checkbox" checked>
+            <input id="enabledCheckbox" type="checkbox">
             <span class="slider"></span>
         </label>
-        <span>phonecam not connected</span>
-        <video playsinline muted autopla hidden></video>
+        <span id="peerStatus">phonecam not connected</span>
     </div>
     <div id="qrInfo" class="row col text-center">
 

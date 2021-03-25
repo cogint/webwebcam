@@ -5,8 +5,8 @@
 let phoneCamStream = false;
 let standbyStream = false;
 let connected = false;
-let shimActive = false;
-let phonecamActive = true;
+let shimActive = false;         // Checks to see if shim has been loaded
+let phonecamActive = true;      // is phoneCam enabled?
 let standbyVideo = false;
 
 /*
@@ -21,14 +21,14 @@ function logger(...message) {
             logger: message
         }
     }));*/
-    console.log('phonecam: ', message.length === 1 ? JSON.stringify(message[0]) : JSON.stringify(message));
+    console.log('phonecam inject: ', message.length === 1 ? JSON.stringify(message[0]) : JSON.stringify(message));
 }
 
 /*
  * Video for standby stream
  */
 
-async function getStandbyStream(width = 1280, height = 720, framerate = 30){
+async function getStandbyStream(width = 1280, height = 720, framerate = 30) {
     // Keep just a single stand-by stream running
     if (standbyStream.active) {
         logger("standbyStream already active");
@@ -148,6 +148,7 @@ async function connectPeer() {
         return
     }
 
+    // ToDo: update this - handler was removed in content.js
     if (!peerId) {
         // ToDo: prevent multiple dispatches before a response
         document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'getId'}}));
@@ -245,8 +246,8 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
             phoneCamStream = await getStandbyStream();
 
             // ToDo: fix audio mute logic; might need a switch for standbyMedia
-            if(swapAudio)
-                // unmute the audio track
+            if (swapAudio)
+            // unmute the audio track
                 standbyVideo.muted = false;
         }
 
@@ -278,7 +279,7 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
     }
 
     // mute the audio if phonecam audio not needed
-    if(swapVideo && !swapAudio && standbyVideo){
+    if (swapVideo && !swapAudio && standbyVideo) {
         logger("Phonecam standby audio not active, muting it");
         standbyVideo.muted = true;
     }
@@ -291,7 +292,7 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
         logger("updated constraints for real gUM:", constraints);
 
         // Load peerJS
-        // ToDo: move this to use only if phonecam is selected?
+        logger(`Here is where I connectPeer using ${peerId}`);
         // await connectPeer();
 
         // If there is no non-phonecam media devices
@@ -319,10 +320,10 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
     } else
     // Nothing to change
     // ToDo: shutdown the standby stream if it is running and phonecam not selected?
-        //ToDo" this isn't working
-        if(standbyStream.active)
-            standbyVideo.muted = true;
-        logger("phonecam not selected, so just passing this along to gUM");
+    //ToDo" this isn't working
+    if (standbyStream.active)
+        standbyVideo.muted = true;
+    logger("phonecam not selected, so just passing this along to gUM");
     return nativeGetUserMedia(origConstraints) // was constraints
 }
 
@@ -337,7 +338,7 @@ function shimGum() {
     };
 
 
-    let _webkitGetUserMedia =  async function (constraints, onSuccess, onError) {
+    let _webkitGetUserMedia = async function (constraints, onSuccess, onError) {
         logger("navigator.webkitUserMedia called");
         try {
             let stream = await shimGetUserMedia(constraints, origGetUserMedia);
@@ -351,26 +352,26 @@ function shimGum() {
     };
 
     navigator.webkitUserMedia = _webkitGetUserMedia;
-    navigator.getUserMedia    = _webkitGetUserMedia;
+    navigator.getUserMedia = _webkitGetUserMedia;
 }
 
-if(phonecamActive)
+if (phonecamActive)
     shimGum();
 
 // Finding: you can't send a stream over postMessage
-
 
 
 /*
  * enumerateDevices shim
  */
 const origEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
-navigator.mediaDevices.enumerateDevices =  function () {
+navigator.mediaDevices.enumerateDevices = function () {
     // logger("navigator.mediaDevices.enumerateDevices called");
-    if (!phonecamActive){
-        return origEnumerateDevices().then(devices=>{return devices});
-    }
-    else
+    if (!phonecamActive) {
+        return origEnumerateDevices().then(devices => {
+            return devices
+        });
+    } else
         return origEnumerateDevices().then(devices => {
 
                 // logger("enumerateDevices shim");
@@ -457,6 +458,7 @@ navigator.mediaDevices.enumerateDevices =  function () {
 
 
                 // ToDo: should I connect here?
+                // logger(`Here is where I connectPeer using ${peerId}`);
                 // connectPeer();
 
                 // This is needed for Teams
@@ -475,22 +477,6 @@ navigator.mediaDevices.enumerateDevices =  function () {
 };
 
 
-/*
-const nativeGetSettings = MediaStreamTrack.prototype.getSettings;
-MediaStreamTrack.prototype.getSettings = function () {
-    //if(phoneCamStream && phoneCamStream.getVideoTracks()[0].trackId === )
-    // ToDo: find a way to get the trackId
-    logger(`MediaStreamTrack.getSettings called`);  //on ${this.trackId}`, this.caller);
-    return nativeGetSettings
-};
-
-const nativeApplyConstraints = MediaStreamTrack.prototype.applyConstraints;
-MediaStreamTrack.prototype.applyConstraints = function (c) {
-    logger(`MediaStreamTrack.getSettings called`); // on ${this.trackId}.`, this.caller, c);
-    return nativeApplyConstraints
-};
-*/
-
 window.addEventListener('beforeunload', () => {
 //    window.removeEventListener('message', {passive: true});
 
@@ -502,22 +488,45 @@ window.addEventListener('beforeunload', () => {
 
 
 document.addEventListener('phonecam-content', e => {
-    // console.log('phonecam-content', e.detail);
+    logger('content.js event data', e.detail);
+
+    if (e.detail.active) {
+        let setEnabled = e.detail.active === "active";
+
+        // Disconnect any streams if enabled
+        if(phonecamActive && setEnabled && connected){
+            peer.destroy();
+            phonecamActive = false;
+                const event = new Event('');
+            // ToDo: initiate a device change event
+
+            return
+        }
+
+        if(!phonecamActive && setEnabled){
+            // ToDo: initiate a device change event
+        }
+
+        logger(phonecamActive === setEnabled ? "no change to phonecamActive" : `phonecamActive is now ${setEnabled}`);
+        phonecamActive = setEnabled;
+    }
+
+
     if (e.detail.peerId) {
         const newId = e.detail.peerId;
         if (peerId === newId) {
             logger("peerId hasn't changed");
-            return
-        }
-
-        peerId = newId;
-        logger(`set new peerId: ${newId}`);
-        if (peer) {
-            peer.destroy();
-            peer = false;
-            connectPeer();
+        } else {
+            peerId = newId;
+            logger(`set new peerId: ${newId}`);
+            if (peer) {
+                peer.destroy();
+                peer = false;
+                connectPeer();
+            }
         }
     }
 });
 
 
+// logger("inject JS loaded");

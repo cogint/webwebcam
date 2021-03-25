@@ -72,6 +72,7 @@ let button = document.getElementById('newQr');
 let idText = document.getElementById('peerIdText');
 let enabledCheckbox = document.getElementById('enabledCheckbox');
 let qrInfo = document.getElementById('qrInfo');
+let peerStatus = document.getElementById('peerStatus');
 
 const backgroundWindow = chrome.extension.getBackgroundPage();
 
@@ -84,24 +85,16 @@ function updateId(){
     qr.init();
 }
 
-
-/**
- *  Communicate with the tabs
- */
-/*
-chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-    port.postMessage({type: "request", id: tabs[0].id});
-});
-
-*/
-
-button.onclick = ()=> updateId();
+enabledCheckbox.checked = backgroundWindow.enabled;
+qrInfo.hidden = !enabledCheckbox.checked;
+peerStatus.hidden = !enabledCheckbox.checked;
 
 enabledCheckbox.onchange= (e)=>{
     let status = e.target.checked;
     qrInfo.hidden = !status;
+    peerStatus.hidden = !enabledCheckbox.checked;
     console.log(`changed phonecam status to: ${status}`);
-    port.postMessage({phonecam: {enabled: status}})
+    backgroundWindow.enabledChange(status);
 };
 
 if(!backgroundWindow.peerId){
@@ -112,4 +105,17 @@ if(!backgroundWindow.peerId){
     qr.url = JSON.stringify({phonecam: backgroundWindow.peerId});
     qr.init();
 }
+
+
+button.onclick = ()=> updateId();
+
+/**
+ *  Communicate with the tabs
+ */
+/*
+chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+    port.postMessage({type: "request", id: tabs[0].id});
+});
+
+*/
 

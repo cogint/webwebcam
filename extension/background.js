@@ -1,76 +1,76 @@
-
-
 /**
  * Function to produce a unique id.
  * See: https://stackoverflow.com/questions/1349404/generate-random-string-characters-in-javascript
  */
 
 function generateId(length) {
-    let result           = '';
-    let characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let charactersLength = characters.length;
-    for ( let i = 0; i < length; i++ ) {
+    for (let i = 0; i < length; i++) {
         result += characters.charAt(Math.floor(Math.random() * charactersLength));
     }
     return result;
 }
 
 let lastActiveTabId;    //ToDo: what happens with multiple tabs?
-
+let peerId;             // keep global for debugging
 
 // Make this global for the pop-up
-window.newId = function newId(){
-    let peerId = generateId(20);
-    localStorage.setItem("phonecam", JSON.stringify({peerId: peerId}));
-    // window.phonecamBackground.peerId = peerId;
+window.newId = function newId() {
+    peerId = generateId(20);
+    localStorage.setItem("peerId", peerId);
     window.peerId = peerId;
     console.log(`new peerId generated: ${peerId}`);
+    sendToTabs({peerId: peerId});
     return peerId
 };
 
+window.enabledChange = function enabledChange(state) {
+    console.log(`Enabled set to ${state}`);
+    localStorage.setItem("enabled", state);
+    enabled = state;
+    window.enabled = state;
+    sendToTabs({active:  state ? "active" : "inactive"});
+};
 
-let settings = JSON.parse(localStorage.getItem("phonecam"));
-if(settings && settings.peerId){
-    let peerId = settings.peerId;
-    window.peerId  = peerId;
+// Establish the peerId
+peerId = localStorage.getItem("peerId");
+if (peerId) {
+    window.peerId = peerId;
     console.log(`peerId loaded: ${peerId}`);
 } else {
     newId()
 }
 
-// To communicate with ???
-chrome.runtime.onConnect.addListener(  port=> {
-    port.postMessage({phonecam: "background.js alive"});
-});
+// Establish enabled setting
+let enabled = JSON.parse(localStorage.getItem("enabled"));
+if (enabled) {
+    window.enabled = enabled;
+    console.log(`phonecam enabled: ${enabled}`);
+} else {
+    // default to enabled
+    enabledChange(true);
+}
 
-
-// Communicate with content.js
-chrome.runtime.onMessage.addListener(
-     (request, sender, sendResponse) => {
-        console.log(`content.js message from tabId: ${sender.tab.id}`, request);
-        if(request.phonecam.message === 'newId'){
-            lastActiveTabId = sender.tab.id;
-            sendResponse({phonecam: {peerId: window.peerId}});
-
-        }
-        /*
-        else if(request.phonecam.message === 'active'){
-            lastActiveTabId = sender.tab.id;
-            sendResponse(`ack to tabId ${lastActiveTabId}`);
-        }*/
-    });
-
-chrome.runtime.onSuspend.addListener( () =>
-    console.log("Extension port disconnected"));
 
 /*
-chrome.tabs.query({active:true, currentWindow: false}, tabs=>{
-    console.log(tabs);
-    chrome.tabs.sendMessage(tabs[0].id, {message: "hello from background.js"}, response=>{
-        console.log(response);
-    })
-});*/
+ * Content.js communication
+ */
 
-// let tabs = chrome.tabs.connect();
-// tabs.postMessage({joke: "Knock knock"});
+chrome.runtime.onMessage.addListener(
+    function(request, sender, sendResponse) {
+        console.log(`message from tab ${sender.tab.id} on ${sender.tab.url}`, request);
+        if(request.phonecam && request.phonecam==="init"){
+            lastActiveTabId = sender.tab.id;
+            let data = {phonecam: {active: enabled ? "active" : "inactive", peerId: peerId}};
+            sendResponse(data);
+            console.log("sent this to content.js", data);
+        }
+    });
 
+
+function sendToTabs(message){
+    console.log(`sending this to ${lastActiveTabId}`, message);
+    chrome.tabs.sendMessage(lastActiveTabId, {phonecam: message}, null, null); //response callback removed
+}

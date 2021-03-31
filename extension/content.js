@@ -20,31 +20,11 @@ document.addEventListener('phonecam-inject', async e => {
     let data = e.detail;
     console.log("phonecam content: inject event data:", JSON.stringify(data));
 
-    /*if(port)
-        port.postMessage(data);*/
-
-    // testing: tell background.js which tab this is
-    // ToDo: remove
-    /*
-    if (data.message === 'active') {
-        chrome.runtime.sendMessage({phonecam: {message: "active"}}, (response) => {
-            console.log(`phonecam content: sent 'active' to background.js. Returned response:`, response)
-        })
+    // ToDo: add handlers for connected, disconnected
+    if(data.message){
+        sendToBackground(data.message)
     }
 
-    if (data.message === 'getId') {
-        chrome.runtime.sendMessage({phonecam: {message: "newId"}}, (response) => {
-
-            if (response.phonecam && response.phonecam.peerId) {
-                let peerId = response.phonecam.peerId;
-                console.log(`phonecam content: returned peerId: ${peerId}`);
-                document.dispatchEvent(new CustomEvent('phonecam-content', {detail: {peerId: peerId}}));
-            } else {
-                console.error("phonecam content: No peerId found. Full response", response);
-            }
-        });
-
-    }*/
 });
 
 
@@ -59,6 +39,7 @@ function backgroundMessageHandler(message) {
         return
     }
 
+    // ToDo: rename active to enabled; use "active" for streams, "enabled" for on/off
     let data = message.phonecam;
     if(active !== data.active || peerId !== data.peerId){
         if(data.active) active = data.active;
@@ -80,8 +61,12 @@ function backgroundMessageHandler(message) {
     }
 }
 
+function sendToBackground(message){
+    chrome.runtime.sendMessage({phonecam: message}, backgroundMessageHandler);
+}
+
 // Get initialization data from background.js
-chrome.runtime.sendMessage({phonecam: "init"}, backgroundMessageHandler);
+sendToBackground("init");
 
 // Listen for updates from background.js
 chrome.runtime.onMessage.addListener(

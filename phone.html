@@ -11,12 +11,16 @@
     <style>
         video {
             height: 100%;
+            z-index: -1;
+        }
+        .mirror{
+            transform: scaleX(-1);
         }
         .video-container{
-            position:relative;
+            /*position:relative;
             display:inline-block;
-            height: 100vh;
-            overflow: auto;
+            height: 100%;
+            /*overflow: auto;*/
         }
         .overlay {
             position:absolute;
@@ -34,16 +38,17 @@
 
 </head>
 <body>
-<div class="container-fluid">
-    <div id="scanPermission" hidden>
+<div class="container-fluid cover-container text-center d-flex flex-column">
+    <span id="warning"></span>
+    <div id="scanPermission" hidden >
         <span>Open the phonecam extension first</span>
         <button id="scan" class="btn btn-primary">Scan QR code</button>
     </div>
 
-    <div class="video-container">
-        <video autoplay playsinline muted></video>
+    <div class="video-container flex-fill vh-100">
+        <video class="mirror" autoplay playsinline muted></video>
         <div class="overlay">
-            <button id="camfacing" class="btn bg-transparent"><i class="fas fa-sync-alt fa-4x"></i></button>
+            <button id="changeCam" class="btn bg-transparent"><i class="fas fa-sync-alt fa-4x"></i></button>
         </div>
     </div>
 

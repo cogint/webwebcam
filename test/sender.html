@@ -9,7 +9,10 @@
 <body>
 <video autoplay muted playsinline></video>
 <script>
-    const peerId = '2ceef1a5-2145-43a6-8cba-235423af1412';
+
+    const urlParams = new URLSearchParams(window.location.search);
+
+    const peerId = urlParams.get("id") || '2ceef1a5-2145-43a6-8cba-235423af1412';
     let peer = new Peer( `${peerId}-sender`, {debug: 3});
     let video =  document.querySelector('video');
     let conn;

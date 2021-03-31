@@ -2,12 +2,13 @@
 
 // ToDo: turn this back into an anonymous function
 
-let phoneCamStream = false;
-let standbyStream = false;
-let connected = false;
+let phoneCamStream = false;     // shows either peerJs stream or standby strream
+let standbyStream = false;      // play something if no connection
+let remoteStream = false;       // holder for the peerJs stream
+let connected = false;          // are we connected to the phone?
 let shimActive = false;         // Checks to see if shim has been loaded
-let phonecamActive = true;      // is phoneCam enabled?
-let standbyVideo = false;
+let phonecamEnabled = true;     // is phoneCam enabled?
+let standbyVideoElem = false;   // global holder for standby video element
 
 /*
  * helper function
@@ -32,30 +33,30 @@ async function getStandbyStream(width = 1280, height = 720, framerate = 30) {
     // Keep just a single stand-by stream running
     if (standbyStream.active) {
         logger("standbyStream already active");
-        return standbyStream;
+    } else {
+
+        // Setup the video element
+        standbyVideoElem = document.createElement('video');
+        standbyVideoElem.id = "phonecamStandby";
+        standbyVideoElem.width = width;
+        standbyVideoElem.height = height;
+        standbyVideoElem.plansinline = true;
+        standbyVideoElem.muted = true;
+        standbyVideoElem.loop = true;
+        standbyVideoElem.src = "chrome-extension://ioljfbldffbenoomdbiainpdgdnmmoep/standby.mp4";
+        // document.body.appendChild(video);
+
+
+        standbyStream = standbyVideoElem.captureStream(framerate);
+
+        /*
+        standbyStream.onactive = ()=> {
+            console.log("after active", standbyStream);
+        };
+         */
+
     }
-
-    // Setup the video element
-    standbyVideo = document.createElement('video');
-    standbyVideo.id = "phonecamStandby";
-    standbyVideo.width = width;
-    standbyVideo.height = height;
-    standbyVideo.plansinline = true;
-    standbyVideo.muted = true;
-    standbyVideo.loop = true;
-    standbyVideo.src = "chrome-extension://ioljfbldffbenoomdbiainpdgdnmmoep/standby.mp4";
-    // document.body.appendChild(video);
-
-
-    standbyStream = standbyVideo.captureStream(framerate);
-
-    /*
-    standbyStream.onactive = ()=> {
-        console.log("after active", standbyStream);
-    };
-     */
-
-    await standbyVideo.play();
+    await standbyVideoElem.play();
     console.log("standby video playing", standbyStream);
     return standbyStream
 
@@ -129,10 +130,7 @@ let peer, peerId;
 
 
 async function connectPeer() {
-    // logger(`connectPeer called. peerId is ${peerId}`);
-    // document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'active'}}));
 
-    //eval(peerjs);
     if (!window.Peer) {
         // ToDo: bundle this
 
@@ -156,53 +154,50 @@ async function connectPeer() {
     }
 
 
-    /*
-    peer = new window.Peer(`${peerId}-page`, {debug: 3});
-    peer.on('connection', conn => conn.on('data', data => logger(`phonecam: incoming data: ${data}`)));
-    peer.on('disconnected', () => logger("peer disconnected"));
-    peer.on('open', id => logger(`phonecam: my peer ID is: ${id}`));
-
-    peer.on('call', call => {
-        call.on('stream', stream => {
-            if (!phoneCamStream)
-                phoneCamStream = window.phoneCamStream = stream;
-            else if(phoneCamStream.getTracks().length > 0){
-                phoneCamStream.getTracks().forEach(track=>track.stop());
-                // stream.getTracks().forEach(track=>phoneCamStream.addTrack(track));
-                phoneCamStream = stream;
-            }
-
-            logger(`phonecam: stream established with streamId: ${phoneCamStream.id}`);
-        });
-
-        call.answer();
-    });
-    */
-
     peer = new window.Peer(`${peerId}-page`, {debug: 3});
     peer.on('open', id => console.log(`My peer ID is ${id}. Waiting for call`));
 
     peer.on('connection', conn => {
         conn.on('data', data => console.log(`Incoming data: ${data}`))
     });
-    peer.on('disconnected', () => console.log("Peer disconnected"));
+
+
+    async function handlePeerDisconnect(e) {
+        connected = false;
+        logger("peer disconnected event", e);
+        document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'disconnected'}}));
+
+
+        // swap in the standby stream and stop the remote
+        if (remoteStream.active) {
+            await standbyVideoElem.play();
+            phoneCamStream = standbyStream;
+            remoteStream.getTracks().forEach(track => track.stop());
+        }
+    }
+
+    peer.on('disconnected', handlePeerDisconnect);
 
     peer.on('call', call => {
+
         call.on('stream', stream => {
-            console.log("Got stream, switching source");
-            if (phoneCamStream.getTracks().length > 0) {
-                console.log("phoneCamStream already had tracks");
-                phoneCamStream.getTracks().forEach(track => track.stop());
-                // stream.getTracks().forEach(track=>phoneCamStream.addTrack(track));
+            logger("Got stream, switching source");
+
+            // ToDo: what happens if there is a mismatch in track count between remote & phonecam?
+            if (remoteStream.active) {
+                console.log("phoneCamStream already had tracks; stopping them");
+                remoteStream.getTracks().forEach(track => track.stop());
             }
-            phoneCamStream = window.phoneCamStream = stream;
+            remoteStream = stream;
+            phoneCamStream = remoteStream;
 
-
-            // Stream on is not a function
-            // stream.on('close', ()=> "Peer stream stopped");
-            // stream.on('error', err=>console.error(err));
+            connected = true;
+            document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'connected'}}));
 
         });
+
+        call.on('close', handlePeerDisconnect);
+
         console.log("Answering incoming call");
         call.answer();
     });
@@ -218,6 +213,34 @@ async function connectPeer() {
  * getUserMedia shim
  */
 
+async function newshimGetUserMedia(constraints, nativeGetUserMedia) {
+    // Keep the original constraints so we can apply them to the phonecam track later
+    const origConstraints = {...constraints};
+    logger("gum requested; original constraints:", origConstraints);
+
+    // State variables
+    let swapAudio = false;
+    let swapVideo = false;
+    let standbyActive = standbyStream.active;
+
+    // Check to see if phoneCam is requested
+    if (constraints.audio && JSON.stringify(constraints.audio).includes('phonecam')) {
+        swapAudio = true;
+        constraints.audio = false;
+    }
+
+    if (constraints.video && JSON.stringify(constraints.video).includes('phonecam')) {
+        swapVideo = true;
+        constraints.video = false;
+    }
+
+
+
+
+
+}
+
+
 async function shimGetUserMedia(constraints, nativeGetUserMedia) {
 
     // Keep the original constraints so we can apply them to the phonecam track later
@@ -228,11 +251,12 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
     let swapAudio = false;
     let swapVideo = false;
 
+    // Check t osee if phoneCam is requested
     if (constraints.audio && JSON.stringify(constraints.audio).includes('phonecam')) {
         swapAudio = true;
         constraints.audio = false;
-
     }
+
     if (constraints.video && JSON.stringify(constraints.video).includes('phonecam')) {
         swapVideo = true;
         constraints.video = false;
@@ -242,13 +266,16 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
     async function addToStream(stream) {
         // Use the standby stream is phoneCam is selected, but not active
         console.log(`phonecam: current phoneCamStream`, phoneCamStream);
+
+        // See if the standby stream is needed
         if (!phoneCamStream || !phoneCamStream.active) {
             phoneCamStream = await getStandbyStream();
 
             // ToDo: fix audio mute logic; might need a switch for standbyMedia
             if (swapAudio)
-            // unmute the audio track
-                standbyVideo.muted = false;
+                standbyVideoElem.muted = false;
+            else
+                standbyVideoElem.muted = true;
         }
 
         if (swapVideo) {
@@ -279,9 +306,9 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
     }
 
     // mute the audio if phonecam audio not needed
-    if (swapVideo && !swapAudio && standbyVideo) {
+    if (!swapAudio && standbyStream.active) {
         logger("Phonecam standby audio not active, muting it");
-        standbyVideo.muted = true;
+        standbyVideoElem.muted = true;
     }
 
 
@@ -293,7 +320,7 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
 
         // Load peerJS
         logger(`Here is where I connectPeer using ${peerId}`);
-        // await connectPeer();
+        await connectPeer();
 
         // If there is no non-phonecam media devices
         if (!constraints.audio && !constraints.video) {
@@ -319,10 +346,10 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
 
     } else
     // Nothing to change
-    // ToDo: shutdown the standby stream if it is running and phonecam not selected?
-    //ToDo" this isn't working
-    if (standbyStream.active)
-        standbyVideo.muted = true;
+    //ToDo: this isn't working??
+    if (standbyStream.active) {
+        standbyVideoElem.pause();
+    }
     logger("phonecam not selected, so just passing this along to gUM");
     return nativeGetUserMedia(origConstraints) // was constraints
 }
@@ -355,7 +382,7 @@ function shimGum() {
     navigator.getUserMedia = _webkitGetUserMedia;
 }
 
-if (phonecamActive)
+if (phonecamEnabled)
     shimGum();
 
 // Finding: you can't send a stream over postMessage
@@ -367,7 +394,7 @@ if (phonecamActive)
 const origEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
 navigator.mediaDevices.enumerateDevices = function () {
     // logger("navigator.mediaDevices.enumerateDevices called");
-    if (!phonecamActive) {
+    if (!phonecamEnabled) {
         return origEnumerateDevices().then(devices => {
             return devices
         });
@@ -467,7 +494,6 @@ navigator.mediaDevices.enumerateDevices = function () {
                     shimGum();
                 }
 
-
                 return devices
             }, err => {
                 logger('enumerateDevices shim error', err);
@@ -494,21 +520,21 @@ document.addEventListener('phonecam-content', e => {
         let setEnabled = e.detail.active === "active";
 
         // Disconnect any streams if enabled
-        if(phonecamActive && setEnabled && connected){
+        if (phonecamEnabled && setEnabled && connected) {
             peer.destroy();
-            phonecamActive = false;
-                const event = new Event('');
+            phonecamEnabled = false;
+            // const event = new Event('devicechange');
             // ToDo: initiate a device change event
 
             return
         }
 
-        if(!phonecamActive && setEnabled){
+        if (!phonecamEnabled && setEnabled) {
             // ToDo: initiate a device change event
         }
 
-        logger(phonecamActive === setEnabled ? "no change to phonecamActive" : `phonecamActive is now ${setEnabled}`);
-        phonecamActive = setEnabled;
+        logger(phonecamEnabled === setEnabled ? "no change to phonecamEnabled" : `phonecamActive is now ${setEnabled}`);
+        phonecamEnabled = setEnabled;
     }
 
 

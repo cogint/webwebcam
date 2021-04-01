@@ -81,6 +81,7 @@ chrome.runtime.onMessage.addListener(
 let script = document.createElement('script');
 script.src = chrome.runtime.getURL('inject.js');
 script.onload = () => this.remove;
+// ToDo: add to head or body? append or prepend?
 (document.head || document.documentElement).appendChild(script);
 
 // console.log("phonecam content: content.js loaded");

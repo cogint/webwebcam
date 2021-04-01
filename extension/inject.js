@@ -8,7 +8,7 @@ let remoteStream = false;       // holder for the peerJs stream
 let connected = false;          // are we connected to the phone?
 let shimActive = false;         // Checks to see if shim has been loaded
 let phonecamEnabled = true;     // is phoneCam enabled?
-let standbyVideoElem = false;   // global holder for standby video element
+let standbyVideoElem = {};   // global holder for standby video element
 
 /*
  * helper function
@@ -31,21 +31,30 @@ function logger(...message) {
 
 async function getStandbyStream(width = 1280, height = 720, framerate = 30) {
     // Keep just a single stand-by stream running
-    if (standbyStream.active) {
+    if (standbyStream &&
+        standbyStream.getAudioTracks()[0].readyState === "active" &&
+        standbyStream.getVideoTracks()[0].readyState === "active") {
         logger("standbyStream already active");
     } else {
 
         // Setup the video element
-        standbyVideoElem = document.createElement('video');
-        standbyVideoElem.id = "phonecamStandby";
-        standbyVideoElem.width = width;
-        standbyVideoElem.height = height;
-        standbyVideoElem.plansinline = true;
-        standbyVideoElem.muted = true;
-        standbyVideoElem.loop = true;
-        standbyVideoElem.src = "chrome-extension://ioljfbldffbenoomdbiainpdgdnmmoep/standby.mp4";
-        // document.body.appendChild(video);
+        if(!document.querySelector('video#phonecamStandby')){
+            standbyVideoElem = document.createElement('video');
+            standbyVideoElem.id = "phonecamStandby";
+            standbyVideoElem.width = width;
+            standbyVideoElem.height = height;
+            standbyVideoElem.plansinline = true;
+            standbyVideoElem.muted = true;
+            standbyVideoElem.loop = true;
+            standbyVideoElem.src = "chrome-extension://ioljfbldffbenoomdbiainpdgdnmmoep/standby.mp4";
+            // document.body.appendChild(standbyVideoElem); //for debugging
+        }
 
+
+        if(standbyStream && standbyStream.getTracks) {
+            standbyStream.getTracks().forEach(track=>track.stop());
+            standbyStream = null;
+        }
 
         standbyStream = standbyVideoElem.captureStream(framerate);
 
@@ -58,9 +67,11 @@ async function getStandbyStream(width = 1280, height = 720, framerate = 30) {
     }
     await standbyVideoElem.play();
     console.log("standby video playing", standbyStream);
+    // window.standbyStream = standbyStream;
     return standbyStream
 
 }
+
 
 /*
 * Canvas animation for standby screen
@@ -171,6 +182,7 @@ async function connectPeer() {
         // swap in the standby stream and stop the remote
         if (remoteStream.active) {
             await standbyVideoElem.play();
+            // ToDo: come back to this
             phoneCamStream = standbyStream;
             remoteStream.getTracks().forEach(track => track.stop());
         }
@@ -212,71 +224,168 @@ async function connectPeer() {
 /*
  * getUserMedia shim
  */
+async function shimGetUserMedia(constraints) {
 
-async function newshimGetUserMedia(constraints, nativeGetUserMedia) {
+    /*
+    if (gumShimInProcess){
+        console.log("gumShim already in-process");
+        return;
+    }
+     */
+
     // Keep the original constraints so we can apply them to the phonecam track later
     const origConstraints = {...constraints};
     logger("gum requested; original constraints:", origConstraints);
 
-    // State variables
-    let swapAudio = false;
-    let swapVideo = false;
-    let standbyActive = standbyStream.active;
-
-    // Check to see if phoneCam is requested
-    if (constraints.audio && JSON.stringify(constraints.audio).includes('phonecam')) {
-        swapAudio = true;
-        constraints.audio = false;
-    }
-
-    if (constraints.video && JSON.stringify(constraints.video).includes('phonecam')) {
-        swapVideo = true;
-        constraints.video = false;
-    }
-
-
-
-
-
-}
-
-
-async function shimGetUserMedia(constraints, nativeGetUserMedia) {
-
-    // Keep the original constraints so we can apply them to the phonecam track later
-    const origConstraints = {...constraints};
-    logger("gum requested; original constraints:", origConstraints);
+    let hasAudio = "audio" in constraints && constraints.audio !== false;
+    let hasVideo = "video" in constraints && constraints.video !== false;
 
     // Check if we should override gUM with our own stream
     let swapAudio = false;
     let swapVideo = false;
 
-    // Check t osee if phoneCam is requested
-    if (constraints.audio && JSON.stringify(constraints.audio).includes('phonecam')) {
+    // Check to see if phoneCam is requested
+    if (hasAudio && JSON.stringify(constraints.audio).includes('phonecam')) {
         swapAudio = true;
         constraints.audio = false;
     }
 
-    if (constraints.video && JSON.stringify(constraints.video).includes('phonecam')) {
+    if (hasVideo && JSON.stringify(constraints.video).includes('phonecam')) {
         swapVideo = true;
         constraints.video = false;
     }
 
+
+    let remoteActive = remoteStream && remoteStream.active;
+    let hasRemoteAudio = remoteActive && remoteStream.getAudioTracks()[0].readyState === "live";
+    let hasRemoteVideo = remoteActive && remoteStream.getVideoTracks()[0].readyState === "live";
+
+    logger(`states:: ` +
+        `hasAudio: ${hasAudio} hasVideo: ${hasVideo} | ` +
+        `swapAudio: ${swapAudio} swapVideo: ${swapVideo} | ` +
+        `hasRemoteAudio: ${hasRemoteAudio} hasRemoteVideo: ${hasRemoteVideo} | ` +
+        `standby: ${standbyStream.active}`);
+
+
+    async function swapTracks(stream) {
+
+        // set the standby tracks up; if we are here assume some swap is needed
+        if (!hasRemoteAudio || !hasRemoteVideo) {
+            logger("getting standby stream");
+            standbyStream = await getStandbyStream();
+            logger("starting standby element playback");
+            standbyVideoElem.play();
+        } else {
+            logger("stopping standby element playback");
+            standbyVideoElem.muted = true;
+            standbyVideoElem.pause();
+        }
+
+
+        if (swapAudio) {
+            let subsAudioTrack = hasRemoteAudio ? remoteStream.getAudioTracks()[0] : standbyStream.getAudioTracks()[0];
+            standbyVideoElem.muted = hasRemoteAudio; // ToDo: this causes issues if there hasn't been any users interaction with the page
+            logger(`standby element is currently ${standbyVideoElem.muted ? "unmuted" : "muted"}`);
+
+            let audioTrackConstraints = {...origConstraints.audio};
+            delete audioTrackConstraints.deviceId;
+            delete audioTrackConstraints.groupId;
+            await subsAudioTrack.applyConstraints(audioTrackConstraints);
+            stream.addTrack(subsAudioTrack);
+
+            logger(`Added audio track ${subsAudioTrack.label} to stream ${stream.id}`);
+        } else {
+            logger(`Muting standby audio`);
+            if(standbyVideoElem.muted === false)
+                standbyVideoElem.muted = true;
+        }
+
+        if (swapVideo) {
+            let subsVideoTrack = hasRemoteVideo ? remoteStream.getVideoTracks()[0] : standbyStream.getVideoTracks()[0];
+
+            let videoTrackConstraints = {...origConstraints.video};
+            delete videoTrackConstraints.deviceId;
+            delete videoTrackConstraints.groupId;
+            delete videoTrackConstraints.facingMode;
+            await subsVideoTrack.applyConstraints(videoTrackConstraints);
+            stream.addTrack(subsVideoTrack);
+            logger(`Added video track ${subsVideoTrack.label} to stream ${stream.id}`);
+        }
+
+        return stream;
+
+    }
+
+    // ToDo: Kill any extra phonecam streams
+    /*
+    if (phoneCamStream.active && phoneCamStream.getTracks() > 0) {
+        phoneCamStream.getTracks().forEach(track => track.stop());
+        phoneCamStream = null;
+    }
+     */
+
+    // Nothing to change - only if swapAudio & swapVideo are BOTH false (XOR)
+    if (!swapAudio && swapAudio === swapVideo) {
+        if(standbyStream && standbyStream.active){
+            standbyVideoElem.muted = true;
+            standbyVideoElem.pause();
+        }
+        logger("phonecam not selected for audio or video, so just passing this along to gUM");
+        return origGetUserMedia(constraints)
+    }
+
+    // If there are only phonecam sources to return
+    else if ((swapAudio && !hasVideo) || (swapVideo && !hasAudio) || (swapAudio && swapVideo)) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                // ToDo: maybe I don't need to kill & create a new stream everytime
+                let stream = await swapTracks(new MediaStream());
+                //console.log("phoneCamStream", phoneCamStream);
+                logger(`created a new stream with just phonecam tracks: ${stream.id}`);
+                resolve(stream);
+            } catch (err) {
+                logger(`Failed to create phonecam stream: ${err}`);
+                reject(err);
+            }
+        })
+    }
+    // if there is one phonecam source and one other source
+    else if ((swapAudio && hasVideo) || (swapVideo && hasAudio)) {
+
+        return new Promise(async (resolve, reject) => {
+            try {
+                let stream = await origGetUserMedia(constraints);
+                stream  = await swapTracks(stream);
+                logger(`Added an ${swapAudio ? "video" : "audio"} track to existing stream ${stream.id}`);
+                resolve(stream);
+            } catch (err) {
+                logger("phonecam: uncaught error", err);
+                reject(err);
+            }
+        })
+
+        /*
+        // If there is a non-phonecam media device, then return the original gUM ++
+        return origGetUserMedia(constraints).then(async stream => {
+            stream = await swapTracks(stream);
+            // logger(`created a new stream ${stream.id} and added it tracks to existing stream ${stream.id}`);
+            logger(`Added an ${swapAudio ? "video" : "audio"} track to existing stream ${stream.id}`);
+            return stream
+        }, err => Promise.reject(err)).catch(err => console.log("phonecam: uncaught error", err));
+         */
+
+
+    } else {
+        logger("invalid getUserMediaShim state");
+        console.error("invalid getUserMediaShim state")
+    }
+
+
+    /*
     // Add the fake stream(s) to the gUM stream
     async function addToStream(stream) {
         // Use the standby stream is phoneCam is selected, but not active
         console.log(`phonecam: current phoneCamStream`, phoneCamStream);
-
-        // See if the standby stream is needed
-        if (!phoneCamStream || !phoneCamStream.active) {
-            phoneCamStream = await getStandbyStream();
-
-            // ToDo: fix audio mute logic; might need a switch for standbyMedia
-            if (swapAudio)
-                standbyVideoElem.muted = false;
-            else
-                standbyVideoElem.muted = true;
-        }
 
         if (swapVideo) {
             let videoTrack = phoneCamStream.getVideoTracks()[0];
@@ -304,6 +413,7 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
 
         return stream
     }
+
 
     // mute the audio if phonecam audio not needed
     if (!swapAudio && standbyStream.active) {
@@ -352,24 +462,31 @@ async function shimGetUserMedia(constraints, nativeGetUserMedia) {
     }
     logger("phonecam not selected, so just passing this along to gUM");
     return nativeGetUserMedia(origConstraints) // was constraints
+     */
 }
 
-function shimGum() {
+const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
-    const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getUserMedia = async function (constraints) {
-        let stream = await shimGetUserMedia(constraints, origGetUserMedia);
-        logger("navigator.mediaDevices.getUserMedia shimmed");
+function shimGum() {
+    if (shimActive){
+        console.log("gUM shim already active; skipping");
+        return
+    }
+
+    //const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async(constraints) => {
+        logger("------------------------------------------");
+        logger("navigator.mediaDevices.getUserMedia called");
+        let stream = await shimGetUserMedia(constraints);
         shimActive = true;
         return stream;
     };
 
-
     let _webkitGetUserMedia = async function (constraints, onSuccess, onError) {
         logger("navigator.webkitUserMedia called");
         try {
-            let stream = await shimGetUserMedia(constraints, origGetUserMedia);
-            logger("navigator.webkitUserMedia should be shimmed");
+            let stream = await shimGetUserMedia(constraints);
+            logger("navigator.webkitUserMedia called");
             shimActive = true;
             return onSuccess(stream)
         } catch (err) {
@@ -380,6 +497,7 @@ function shimGum() {
 
     navigator.webkitUserMedia = _webkitGetUserMedia;
     navigator.getUserMedia = _webkitGetUserMedia;
+
 }
 
 if (phonecamEnabled)

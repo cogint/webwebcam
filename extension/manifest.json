@@ -25,5 +25,5 @@
   "permissions": [
     "http://*/", "https://*/"
   ],
-  "web_accessible_resources": ["inject.js", "standby.mp4", "peerjs.min.js"]
+  "web_accessible_resources": ["inject.js", "peerjs.min.js"]
 }

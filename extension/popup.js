@@ -85,7 +85,7 @@ function updateId(){
     qr.init();
 }
 
-enabledCheckbox.checked = backgroundWindow.enabled;
+enabledCheckbox.checked = backgroundWindow.enabled === "enabled";
 qrInfo.hidden = !enabledCheckbox.checked;
 peerStatus.hidden = !enabledCheckbox.checked;
 
@@ -93,8 +93,8 @@ enabledCheckbox.onchange= (e)=>{
     let status = e.target.checked;
     qrInfo.hidden = !status;
     peerStatus.hidden = !enabledCheckbox.checked;
-    console.log(`changed phonecam status to: ${status}`);
-    backgroundWindow.enabledChange(status);
+    console.log(`changed phonecam status to: ${status ? "enabled": "disabled"}`);
+    backgroundWindow.enabledChange(status ? "enabled": "disabled");
 };
 
 if(!backgroundWindow.peerId){
@@ -109,13 +109,4 @@ if(!backgroundWindow.peerId){
 
 button.onclick = ()=> updateId();
 
-/**
- *  Communicate with the tabs
- */
-/*
-chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-    port.postMessage({type: "request", id: tabs[0].id});
-});
-
-*/
-
+backgroundWindow.popupOpen();

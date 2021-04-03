@@ -23,7 +23,7 @@
   },
   "version": "0.0.1",
   "permissions": [
-    "http://*/", "https://*/"
+    "http://*/", "https://*/", "storage"
   ],
   "web_accessible_resources": ["inject.js", "peerjs.min.js"]
 }

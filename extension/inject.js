@@ -7,7 +7,7 @@ let standbyStream = false;      // play something if no connection
 let remoteStream = false;       // holder for the peerJs stream
 let connected = false;          // are we connected to the phone?
 let shimActive = false;         // Checks to see if shim has been loaded
-let phonecamEnabled = true;     // is phoneCam enabled?
+let phonecamEnabled = true;     // is phoneCam enabled? // ToDo: find an instant way to initialize this
 
 /*
  * helper function
@@ -21,7 +21,7 @@ function logger(...message) {
             logger: message
         }
     }));*/
-    console.log('phonecam inject: ', message.length === 1 ? JSON.stringify(message[0]) : JSON.stringify(message));
+    console.log('phonecam inject: ', message.length === 1 ? message[0] : JSON.stringify(message));
 }
 
 /*
@@ -89,6 +89,7 @@ function getStandbyStream(width = 1280, height = 720, framerate = 30) {
     /*
      *  Audio from webaudio
      */
+    // ToDo: Check for user gesture first - see: https://stackoverflow.com/questions/59150956/best-solution-for-unlocking-web-audio
     function makeFakeAudio() {
         let audioCtx = new AudioContext();
         let streamDestination = audioCtx.createMediaStreamDestination();
@@ -139,7 +140,8 @@ function getStandbyStream(width = 1280, height = 720, framerate = 30) {
  */
 
 
-let peer, peerId;
+let peer;
+let peerId;
 
 
 async function connectPeer() {
@@ -347,6 +349,10 @@ function shimGum() {
 
     //const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async(constraints) => {
+        if(!phonecamEnabled){
+            return origGetUserMedia(constraints)
+        }
+
         logger("------------------------------------------");
         logger("navigator.mediaDevices.getUserMedia called");
         let stream = await shimGetUserMedia(constraints);
@@ -355,6 +361,10 @@ function shimGum() {
     };
 
     let _webkitGetUserMedia = async function (constraints, onSuccess, onError) {
+        if(!phonecamEnabled){
+            return _webkitGetUserMedia(constraints, onSuccess, onError)
+        }
+
         logger("navigator.webkitUserMedia called");
         try {
             let stream = await shimGetUserMedia(constraints);
@@ -372,8 +382,8 @@ function shimGum() {
 
 }
 
-if (phonecamEnabled)
-    shimGum();
+//if (phonecamEnabled)
+shimGum();
 
 // Finding: you can't send a stream over postMessage
 
@@ -382,12 +392,11 @@ if (phonecamEnabled)
  * enumerateDevices shim
  */
 const origEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
-navigator.mediaDevices.enumerateDevices = function () {
+
+function enumDevicesShim(){
     // logger("navigator.mediaDevices.enumerateDevices called");
     if (!phonecamEnabled) {
-        return origEnumerateDevices().then(devices => {
-            return devices
-        });
+        return origEnumerateDevices()
     } else
         return origEnumerateDevices().then(devices => {
 
@@ -490,7 +499,9 @@ navigator.mediaDevices.enumerateDevices = function () {
                 Promise.reject(err);
             }
         );
-};
+}
+
+navigator.mediaDevices.enumerateDevices = enumDevicesShim;
 
 
 window.addEventListener('beforeunload', () => {
@@ -506,25 +517,63 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('phonecam-content', e => {
     logger('content.js event data', e.detail);
 
-    if (e.detail.active) {
-        let setEnabled = e.detail.active === "active";
+    if (e.detail.enabled) {
+        // let setEnabled = e.detail.active === "active";
+        let enabledState = e.detail.enabled;
 
-        // Disconnect any streams if enabled
-        if (phonecamEnabled && setEnabled && connected) {
-            peer.destroy();
-            phonecamEnabled = false;
-            // const event = new Event('devicechange');
-            // ToDo: initiate a device change event
+        let currentPhonecamEnabled = phonecamEnabled;
+
+        phonecamEnabled = enabledState === "enabled";
+
+        if(currentPhonecamEnabled === phonecamEnabled){
+            logger(`No change to enabled state. It is still ${phonecamEnabled}`);
+            return
+        }
+
+        logger(`phonecamEnabled is now ${phonecamEnabled}`);
+
+        // ToDo: this disable / enable isn't working right
+        // I think I need to keep shims always active for it to work
+
+        /*
+         * Disable
+         */
+        if (phonecamEnabled && enabledState === "disabled") {
+            logger("ending any connection and disabling shims");
+
+            if (connected){
+                peer.destroy();
+                phonecamEnabled = false;
+            }
+
+            if(standbyStream.enabled)
+                standbyStream.getTracks().forEach(track=>track.stop());
+
+            // Reset gUM
+            // navigator.mediaDevices.getUserMedia = origGetUserMedia;
+            shimActive = false;
+
+            // reset enumerateDevices
+            // navigator.mediaDevices.enumerateDevices = origEnumerateDevices;
+
+            logger("sent devicechange event");
 
             return
         }
 
-        if (!phonecamEnabled && setEnabled) {
-            // ToDo: initiate a device change event
+        /*
+         * Enable
+         */
+        if (phonecamEnabled === false && enabledState === "enabled") {
+            logger("enabling shims");
+            shimGum();
+            //navigator.mediaDevices.enumerateDevices = enumDevicesShim;
+
         }
 
-        logger(phonecamEnabled === setEnabled ? "no change to phonecamEnabled" : `phonecamActive is now ${setEnabled}`);
-        phonecamEnabled = setEnabled;
+        let fakeDeviceChange = new Event("devicechange");
+        navigator.mediaDevices.dispatchEvent(fakeDeviceChange);
+
     }
 
 

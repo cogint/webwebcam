@@ -1,46 +1,55 @@
 let video = document.querySelector('video');
 let changeCam = document.getElementById('changeCam');
-let openCamBtn = document.getElementById('scanQr');
+// let openCamBtn = document.getElementById('scanQr');
 let permissions = document.getElementById('scanPermission');
 let warning = document.getElementById('warning');
 
-let conn;
+// ToDo: Do these need to be global?
+let connExt = false;
+let connPage = false;
+
 let mobile = false;
 let facingMode = "user";
-const CALL_RETRY_PERIOD = 2*1000;
+const CALL_RETRY_PERIOD = 2 * 1000;
 let deviceIds = [];
 let index = -1;
 let currentDeviceId = "";
 let disablePeer = false;
 
-function errorHandler(error){
+let peer, extCall, pageCall; // Global holders for calls
+
+// let previewStream = new MediaStream(); // holder for preview
+
+function errorHandler(error) {
     console.error(error)
     // ToDo: send this over peerjs
     // console.error(`${e.name}: ${e.message}`);
-    // conn.send(`${e.name}: ${e.message}`);
+    // connExt.send(`${e.name}: ${e.message}`);
 }
 
 // Scans all video devices to see if facing mode is available
-async function scanDevices(){
+async function scanDevices() {
     console.log("device scan");
-    try{
+    try {
         let devices = await navigator.mediaDevices.enumerateDevices();
-        devices.forEach(async device=>{
-           if(device.kind==="videoinput"){
-               console.log(device);
-               deviceIds.push(device.deviceId);
-               let stream = await navigator.mediaDevices.getUserMedia({video: true} );
-               stream.getVideoTracks().every(track=>{
-                   let settings = track.getSettings();
-                   if(settings.facingMode){
-                       mobile = true;
-                       console.log("facingMode found");
-                       return false; //break out
-                   }
-               })
-           }
+        devices.forEach(async device => {
+            if (device.kind === "videoinput") {
+                console.log(device);
+                deviceIds.push(device.deviceId);
+                let stream = await navigator.mediaDevices.getUserMedia({video: true});
+                stream.getVideoTracks().every(track => {
+                    let settings = track.getSettings();
+                    if (settings.facingMode) {
+                        mobile = true;
+                        console.log("facingMode found");
+                        return false; //break out
+                    }
+                })
+            }
         });
-    } catch (e) {errorHandler(e)}
+    } catch (e) {
+        errorHandler(e)
+    }
 }
 
 // getUserMedia wrapper that checks for facing mode or device in case of mobile
@@ -49,34 +58,33 @@ async function getMedia() {
         video: {
             width: {ideal: 1920},
             height: {ideal: 1080}
-        }};
+        }
+    };
 
     // ToDo: this is freezing my Pixel4xl
-    if(mobile){
-        if (facingMode === "environment"){
+    if (mobile) {
+        if (facingMode === "environment") {
             facingMode = "user";
-        }
-        else{
+        } else {
             facingMode = "environment";
             video.classList.remove('mirror');
         }
 
         constraints.video.facingMode = {ideal: facingMode};
 
-    }
-    else{
+    } else {
         index++;
 
-        if(index > deviceIds.length)
-            index=0;
+        if (index > deviceIds.length)
+            index = 0;
 
         // If the next id happens to be the current selection, go to the next one
-        if(currentDeviceId === deviceIds[index])
+        if (currentDeviceId === deviceIds[index])
             index++;
 
         constraints.video.deviceId = deviceIds[index];
 
-       }
+    }
 
     // How get the stream
     try {
@@ -86,101 +94,179 @@ async function getMedia() {
 
         let currentDeviceSettings = stream.getVideoTracks()[0].getSettings();
         currentDeviceId = currentDeviceSettings.deviceId;
-        if(currentDeviceSettings.facingMode==="environment")
+        if (currentDeviceSettings.facingMode === "environment")
             video.classList.remove('mirror');
         else
             video.classList.add('mirror');
 
 
-        if(deviceIds.length <= 0){
+        if (deviceIds.length <= 0) {
             await scanDevices();
         }
         return stream;
-    } catch (e) {errorHandler(e)}
+    } catch (e) {
+        errorHandler(e)
+    }
 
 }
 
 changeCam.onclick = async () => {
 
 
-    if (video.srcObject)
-        video.srcObject.getTracks().forEach(track => track.stop());
+    // ToDo: catch errors
+    let newStream = await getMedia().catch(err=>{
+        console.error(err);
+    });
 
-    let newStream = await getMedia();
+    if(!newStream)
+        return;
+
+    let stream = video.srcObject;
+
     video.srcObject = newStream;
+
+    if (stream){
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+    }
+
+
+
+    if (extCall && extCall.open) {
+        let previewTrack = newStream.getVideoTracks()[0].clone();
+        await previewTrack.applyConstraints({height: 90, frameRate: 15});
+        await extCall.peerConnection.getSenders()[0].replaceTrack(previewTrack);
+        console.log("replaced preview stream track to peer");
+    }
+
+    if (pageCall && pageCall.open){
+        let videoSender = await pageCall.peerConnection.getSenders().find(s=> {
+            return s.track.kind === "video";
+        });
+        console.log("sender", sender);
+        videoSender.replaceTrack(track);
+
+        let audioSender = await pageCall.peerConnection.getSenders().find(s=> {
+            return s.track.kind === "audio";
+        });
+        console.log("sender", sender);
+        audioSender.replaceTrack(track);
+
+
+        console.log("replaced preview stream track to peer");
+    }
+
+
+    //    .then(()=>previewStream.addTrack(previewTrack))
+    //    .catch(err=>console.error(err));
 
     // ToDo: update this
     // call.peerConnection.getSenders()[0].replaceTrack(newStream.getVideoTracks()[0]);
 
-    // conn.send(`switch camera input to ${facingMode}`);
+    // connExt.send(`switch camera input to ${facingMode}`);
 
 };
 
-function startPeer(peerId){
+
+function extPeer(peerId) {
 
     // For debugging
-    if(urlParams.has("nopeer")){
+    if (urlParams.has("nopeer")) {
         disablePeer = true;
         console.log("peerjs disabled from url parameter");
         return;
     }
 
-    let peer = new Peer(`${peerId}-phone`, {debug: 3});
-    let connTimeout = false;
-
-    function startCall(){
-        // wait for a connection
-        conn.on('open',()=>{
-            //conn.on('data', data => console.log(`Incoming data: ${data}`))
-            console.log("connection established; starting call");
-            if (connTimeout) clearTimeout(connTimeout);
-            // conn.send({devices: devices}); //ToDo: didn't work
-            peer.call(`${peerId}-page`, video.srcObject);
-        });
+    if (peer && peer.id) {
+        console.log(`${connExt.label}: peerjs already connected`);
+        return;
     }
 
+    peer = new Peer(`${peerId}-phone`, {debug: 0});
+    let connTimeout = false;
 
-    peer.on('open',  id=> {
-        console.log('My peer ID is: ' + id);
-        console.log("connected to peerServer. Trying to connect to peer");
-        conn = peer.connect(`${peerId}-page`);
-        // start the call if already playing
-        if(video.srcObject && video.srcObject.active)
-            startCall();
-        // otherwise wait for media to start- user might not accept permissions right away
-        else
-            video.onplay = ()=> startCall();
-    });
 
-    peer.on('error', (err)=>{
-        if(err.type === 'peer-unavailable'){
-            console.log(`Peer wasn't available right now. Trying again in ${CALL_RETRY_PERIOD/1000} seconds`);
-            connTimeout = setTimeout(()=>{
-                if(!conn.open){
-                    console.log("trying to connect to peer again");
-                    conn = peer.connect(`${peerId}-page`);
-                }
-            }, 5*CALL_RETRY_PERIOD)
+    function handleDisconnect() {
 
-        }
-        else
-            console.error(err)
-    });
-    peer.on('close', ()=>console.log("Peer closed"));
-    peer.on('disconnected', ()=>console.log("Peer disconnected"));
+        console.log(`Disconnected. Trying reconnect to ${connExt.peer} in ${CALL_RETRY_PERIOD / 1000} seconds`);
+        connTimeout = setTimeout(() => {
+            if (!connExt.open) {
+                console.log(`Trying to connect to peer ${connExt} again`);
+                connExt = peer.connect(`${peerId}-page`, {label: "phone<=>ext"});
+            }
+        }, CALL_RETRY_PERIOD);
 
-    /*
-    peer.on('disconnected', () => console.log("Peer disconnected"));
+        console.log(`Disconnected. Trying reconnect to ${connPage.peer} in ${CALL_RETRY_PERIOD / 1000} seconds`);
+        connTimeout = setTimeout(() => {
+            if (!connPage.open) {
+                console.log(`Trying to connect to peer ${connPage.peer} again`);
+                connExt = peer.connect(`${peerId}-page`, {label: "phone<=>ext"});
+            }
+        }, CALL_RETRY_PERIOD)
+    }
 
     peer.on('open', async id => {
-        console.log('My peer ID is: ' + id);
-        //let stream = await getMedia();
-        // video.srcObject = stream;
-        stream = video.srcObject;
-        call = peer.call(`${peerId}-page`, stream);
-    });
-     */
+        //console.log('My peer ID is: ' + id);
+        console.log(`Connected to peerServer. ${id}`);
+        connExt = peer.connect(`${peerId}-ext`);
+        connPage = peer.connect(`${peerId}-page`);
 
+        [connExt, connPage].forEach(conn=>conn.on('open', () => {
+
+            console.log(`${peer.id}: Datachannel open with ${conn.peer}`);
+            connExt.on('data', function (data) {
+                console.log(`${peer.id}: Received ${JSON.stringify(data)}`);
+            });
+        }));
+
+        // Send the preview video
+        // Video should there
+        if (video.srcObject && video.srcObject.active) {
+
+            // Preview window
+
+            let previewStream = new MediaStream();
+            let previewTrack = video.srcObject.getVideoTracks()[0].clone();
+            await previewTrack.applyConstraints({height: 90, frameRate: 15});
+            previewStream.addTrack(previewTrack);
+
+            extCall = peer.call(`${peerId}-ext`, previewStream);
+            console.log("initiated preview stream call");
+
+
+            // ToDo: wait for a signal before trying this
+            // Page
+            pageCall = peer.call(`${peerId}-page`, video.srcObject);
+            console.log("initiated page call");
+
+
+            [extCall, pageCall].forEach(call=>{
+
+
+            })
+
+        }
+    });
+
+    // User notice to install / check the extension
+    peer.on('error', (err) => {
+        if (err.type === 'peer-unavailable') {
+            console.error(err);
+            console.log(`${peer.id}: Extension Peer isn't available right now.`);
+            handleDisconnect();
+        } else
+            console.error(err)
+    });
+
+    peer.on('close', () => {
+        console.log(`${peer.id}: Peer closed`);
+        handleDisconnect();
+    });
+
+    peer.on('disconnected', (e) => {
+        console.log(`${peer.id}: peer disconnected from server. Attempting to reconnect`, e);
+        peer.reconnect();
+    });
 
 
 }
@@ -191,13 +277,13 @@ async function camPermissions() {
     // ToDo: adapt for FF & Safari
     // this doesn't work on Safari or FF
 
-    return new Promise( async (resolve, reject) =>{
+    return new Promise(async (resolve, reject) => {
         navigator.permissions.query({name: "camera"})
-            .then(status=>{
+            .then(status => {
                 console.log("gUM permission status", status.state);
                 resolve(status.state === "granted");
             })
-        .catch(err=>reject(err))
+            .catch(err => reject(err))
     });
 
 
@@ -208,8 +294,7 @@ async function camPermissions() {
 }
 
 
-
-async function scanQr(){
+async function scanQr() {
     let canvas = document.createElement('canvas');
     //let canvas  = document.querySelector('canvas');
     let ctx = canvas.getContext("2d");
@@ -219,25 +304,23 @@ async function scanQr(){
         canvas.height = video.videoHeight;
         canvas.width = video.videoWidth;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        let imageData = ctx.getImageData(0,0,canvas.width, canvas.height);
+        let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         let code = jsQR(imageData.data, imageData.width, imageData.height, {});
 
-        if(code){
+        if (code) {
             console.log(code.data);
-            if(code.data.toLowerCase().includes("phonecam")) {
+            if (code.data.toLowerCase().includes("phonecam")) {
                 let peerId = JSON.parse(code.data).phonecam;
-                if(peerId) {
+                if (peerId) {
                     console.log(`scanned ID: ${peerId}`);
-                    startPeer(peerId);
-                }
-                else{
+                    extPeer(peerId);
+                } else {
                     // This was giving violation errors
                     requestAnimationFrame(checkQr);
                     console.log("bad QR code");
                 }
             }
-        }
-        else
+        } else
             requestAnimationFrame(checkQr);
     }
 
@@ -247,19 +330,18 @@ async function scanQr(){
 const urlParams = new URLSearchParams(window.location.search);
 
 
-if(urlParams.has("id")){
+if (urlParams.has("id")) {
     let peerId = urlParams.get("id");
     console.log(`Using peerid ${peerId} from URL params`);
-    video.onloadeddata = () => startPeer(peerId);
-}
-else
-    video.onloadeddata = ()=> scanQr();
+    video.onloadeddata = () => extPeer(peerId);
+} else
+    video.onloadeddata = () => scanQr();
 
 //window.addEventListener('DOMContentLoaded', ()=>{});
 
 
-camPermissions().then(async permission=>{
-    if(permission) {
+camPermissions().then(async permission => {
+    if (permission) {
         video.srcObject = await getMedia();
     } else {
         warning.innerText = "click anywhere to accept media permissions";
@@ -268,8 +350,8 @@ camPermissions().then(async permission=>{
         document.onclick = async () => video.srcObject = await getMedia();
         warning.style.display = "none";
     }
-}).catch(err=>errorHandler(err));
-
+}).catch(err => errorHandler(err));
 
 
 // https://f8d1715bb8a2.ngrok.io/phone.html?nopeer
+// https://2189773fe177.ngrok.io/phone.html?id=9SZ81QrI5mzGNYtFFDDX

@@ -48,15 +48,15 @@
     function startCall(){
         // wait for a connection
         conn.on('open',()=>{
-            //conn.on('data', data => console.log(`Incoming data: ${data}`))
+            //connExt.on('data', data => console.log(`Incoming data: ${data}`))
             console.log("connection established; starting call");
             clearTimeout(connTimeout);
-            // conn.send({devices: devices}); //ToDo: didn't work
+            // connExt.send({devices: devices}); //ToDo: didn't work
             peer.call(`${peerId}-viewer`, video.srcObject);
         });
     }
 
-    // This is redundant with conn.on
+    // This is redundant with connExt.on
     peer.on('connection', () => {
     });
 

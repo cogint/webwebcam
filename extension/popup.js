@@ -73,8 +73,41 @@ let idText = document.getElementById('peerIdText');
 let enabledCheckbox = document.getElementById('enabledCheckbox');
 let qrInfo = document.getElementById('qrInfo');
 let peerStatus = document.getElementById('peerStatus');
+let preview = document.getElementById('preview');
+let previewVideo = document.querySelector('video');
+
 
 const backgroundWindow = chrome.extension.getBackgroundPage();
+
+
+enabledCheckbox.checked = backgroundWindow.enabled === "enabled";
+// qrInfo.hidden = !enabledCheckbox.checked;
+// peerStatus.hidden = !enabledCheckbox.checked;
+
+peerStatus.innerText = backgroundWindow.updateStatusMessage();
+
+// Sync DOM elements with existing states
+let currentState = backgroundWindow.peerState();
+if(currentState === 'disconnected' || currentState === 'closed'){
+    qrInfo.classList.remove('d-none');
+    preview.classList.add('d-none');
+}
+else{
+    qrInfo.classList.add('d-none');
+    if(currentState === 'call'){
+        preview.classList.remove('d-none');
+        previewVideo.srcObject = backgroundWindow.stream;
+
+    }
+}
+
+// Share/assign elements to background.js context
+backgroundWindow.statusMessage = peerStatus;
+backgroundWindow.qrInfo = qrInfo;
+backgroundWindow.preview = preview;
+backgroundWindow.previewVideo = previewVideo;
+
+
 
 // let peerId;
 
@@ -84,10 +117,6 @@ function updateId(){
     qr.url = JSON.stringify({phonecam: id});
     qr.init();
 }
-
-enabledCheckbox.checked = backgroundWindow.enabled === "enabled";
-qrInfo.hidden = !enabledCheckbox.checked;
-peerStatus.hidden = !enabledCheckbox.checked;
 
 enabledCheckbox.onchange= (e)=>{
     let status = e.target.checked;
@@ -107,6 +136,6 @@ if(!backgroundWindow.peerId){
 }
 
 
-button.onclick = ()=> updateId();
 
-backgroundWindow.popupOpen();
+
+button.onclick = ()=> updateId();

@@ -2,7 +2,6 @@
 
 // ToDo: turn this back into an anonymous function
 
-let phoneCamStream = false;     // shows either peerJs stream or standby strream
 let standbyStream = false;      // play something if no connection
 let remoteStream = false;       // holder for the peerJs stream
 let connected = false;          // are we connected to the phone?
@@ -169,7 +168,7 @@ async function connectPeer() {
     }
 
 
-    peer = new window.Peer(`${peerId}-page`, {debug: 3});
+    peer = new window.Peer(`${peerId}-page`, {debug: 0});
     peer.on('open', id => console.log(`My peer ID is ${id}. Waiting for call`));
 
     peer.on('connection', conn => {
@@ -185,9 +184,7 @@ async function connectPeer() {
 
         // swap in the standby stream and stop the remote
         if (remoteStream.active) {
-            await standbyVideoElem.play();
-            // ToDo: come back to this
-            phoneCamStream = standbyStream;
+            standbyStream = await getStandbyStream();
             remoteStream.getTracks().forEach(track => track.stop());
         }
     }
@@ -200,12 +197,7 @@ async function connectPeer() {
             logger("Got stream, switching source");
 
             // ToDo: what happens if there is a mismatch in track count between remote & phonecam?
-            if (remoteStream.active) {
-                console.log("phoneCamStream already had tracks; stopping them");
-                remoteStream.getTracks().forEach(track => track.stop());
-            }
             remoteStream = stream;
-            phoneCamStream = remoteStream;
 
             connected = true;
             document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'connected'}}));
@@ -217,6 +209,11 @@ async function connectPeer() {
         console.log("Answering incoming call");
         call.answer();
     });
+
+}
+
+// ToDo: function to replace all peerConnection senders ??
+function swapSenders(track){
 
 }
 
@@ -310,7 +307,6 @@ async function shimGetUserMedia(constraints) {
         return new Promise(async (resolve, reject) => {
             try {
                 let stream = await swapTracks(new MediaStream());
-                //console.log("phoneCamStream", phoneCamStream);
                 logger(`created a new stream with just phonecam tracks: ${stream.id}`);
                 resolve(stream);
             } catch (err) {

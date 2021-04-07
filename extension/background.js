@@ -1,7 +1,7 @@
-/*
+/**
  * Content.js communication
  */
-let lastActiveTabId;    //ToDo: what happens with multiple tabs?
+let lastActiveTabId;        // ToDo: what happens with multiple tabs?
 
 chrome.runtime.onMessage.addListener(
     function (request, sender, sendResponse) {
@@ -16,7 +16,7 @@ chrome.runtime.onMessage.addListener(
 
 
         if (request.phonecam === "hello") {
-            sendResponse( {phonecam: "ACK" }); // content.js backgroundMessageHandler throws an error without this
+            sendResponse({phonecam: "ACK"}); // content.js backgroundMessageHandler throws an error without this
             console.log(`tab ${sender.tab.id} active`);
         } else if (request.phonecam === "needData") {
             let data = {phonecam: {active: enabled ? "active" : "inactive", peerId: peerId}};
@@ -50,6 +50,9 @@ function generateId(length) {
     return result;
 }
 
+/**
+ * Shared functions with popup.js
+ */
 
 // Make this global for the pop-up
 window.newId = function newId() {
@@ -74,13 +77,46 @@ window.enabledChange = function enabledChange(state) {
 };
 
 // Update the current tab ID for comms if the popup is opened
-window.popupOpen = function popupOpen(){
-    chrome.tabs.query({active: true, currentWindow: true}, tabs=> {
+window.popupOpen = function popupOpen() {
+    chrome.tabs.query({active: true, currentWindow: true}, tabs => {
         console.log(`popup opened on tab ${tabs[0].id}`);
         lastActiveTabId = tabs[0].id;
     });
 };
 
+let lastState = "disconnected";
+window.peerState = function peerState(state) {
+    if(!state){
+        return lastState;
+    }
+    else {
+        console.log(`Updated peerState: ${state}`);
+        sendToTabs({peerState: state});
+        lastState = state;
+        return(state);
+    }
+};
+
+
+// Status text shown on the popup
+let lastMessage = "waiting for initialization";
+window.updateStatusMessage = function updateStatusMessage(message) {
+    if(!message){
+        return lastMessage
+    } else {
+
+        if (window.statusMessage && window.statusMessage.innerText) {
+            window.statusMessage.innerText = message;
+        }
+
+        lastMessage = message;
+        return message
+    }
+};
+
+/**
+ * Initialization
+ */
 
 // Establish the peerId
 let peerId = localStorage.getItem("peerId");
@@ -106,3 +142,81 @@ if (enabled !== null) {
     // Default to enabled
     enabledChange(true, true)
 }
+
+updateStatusMessage("phonecam not connected");
+
+/**
+ * peer.js setup
+ */
+
+
+let peer = new Peer(`${peerId}-ext`, {debug: 0});
+
+function handlePeerDisconnect(e) {
+    // ToDo: send message to tabs
+    console.log("peer disconnected from server. Attempting to reconnect", e);
+    updateStatusMessage("phonecam disconnected");
+    peer.reconnect();
+
+    qrInfo.classList.remove('d-none');
+    preview.classList.add('d-none');
+}
+
+
+peer.on('open', id => {
+    peerState("open");
+    console.log(`My peer ID is ${id}. Waiting for connection from phone.js`)
+});
+
+peer.on('connection', conn => {
+
+    peerState("connected");
+    // ToDo: update pop-up
+    updateStatusMessage("phonecam available");
+    qrInfo.classList.add('d-none');
+
+    conn.on('open', ()=> {
+        console.log(`Datachannel open`);  //${conn.id}`);
+        conn.on('data', data => console.log(`Incoming data from ${conn.peer}: ${data}`));
+
+        conn.send("hello");
+
+        }
+    );
+
+    /*
+    conn.on('close', () => {
+        //peerState("closed");
+        // console.log(`Connection from peer ${conn.peer} closed`);
+        statusMessage("phonecam disconnected");
+        qrInfo.classList.remove('d-none');
+        previewVideo.classList.add('d-none');
+
+    });
+
+    conn.on('error', error => {console.error(`peerjs error`, error));
+     */
+});
+
+peer.on('close', () => {
+    // console.log(`Connection closed`);
+    peerState("closed");
+    updateStatusMessage("phonecam closed");
+    qrInfo.classList.remove('d-none');
+    preview.classList.add('d-none');
+});
+
+peer.on('disconnected', handlePeerDisconnect);
+
+peer.on('call', call => {
+    console.log("incoming call");
+    call.answer();
+    call.on('stream', stream=>{
+        previewVideo.srcObject = stream;
+        window.stream = stream;
+
+        preview.classList.remove("d-none");
+        peerState("call");
+        console.log(`stream ${stream.id} attached to pop-up preview window`);
+    });
+});

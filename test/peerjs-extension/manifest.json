@@ -1,0 +1,17 @@
+{
+  "manifest_version": 2,
+  "name": "PhoneCam Debugging",
+  "description": "debug for phonecam",
+  "version": "0.0.1",
+  "permissions": [
+    "http://*/", "https://*/", "storage"
+  ],
+  "background": {
+    "page": "background.html",
+    "persistent": true
+  },
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "phonecam - debugging"
+  }
+}

@@ -17,7 +17,13 @@ window.addEventListener('load', async ()=> {
 
     peer.on('call', call => {
         call.on('stream', stream => {
-            console.log("Got stream, setting video source");
+            if(video.srcObject && video.srcObject.id === stream.id){
+                console.log("duplicate stream. (bad peerjs)", stream);
+                return;
+            }
+
+
+            console.log("Got stream, setting video source", stream);
             video.srcObject = stream;
             window.stream = stream;
         });

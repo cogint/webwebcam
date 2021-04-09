@@ -3,32 +3,56 @@ let video;
 
 chrome.tabs.create({url: chrome.extension.getURL('viewer.html')});
 
+// alert('try this'); // didn't work
 
 window.addEventListener('load', async () => {
-    //video =  document.querySelector('video');
-    let stream = await getStandbyStream2(); // canvas+webaudio not working
+    // video = document.querySelector('video');
+
+    //ToDo: Debug
+
+    //*** This shows a frozen green frame
+    // let stream = await standbyFromVideo(); // canvas+webaudio not working
+
+    //*** This requires clicking on the popup 5 times before the image shows
+    let stream = await standbyFromImage(); // canvas+webaudio not working
+
     window.stream = stream;
     console.log(stream.getTracks());
-    //video.srcObject = stream;
-    //await video.play()
+    // video.srcObject = stream;
+    // await video.play()
 
 });
 
 const peerId = '2ceef1a5-2145-43a6-8cba-235423af1412';
 let peer = new Peer(`${peerId}-ext`, {debug: 0});
 
-peer.on('open', id => {
+peer.on('open', async id => {
     console.log('My peer ID is: ' + id);
     console.log("connected to peerServer. Trying to connect to peer");
 
-    let call;
-    if (stream && stream.active)
-        call = peer.call(`${peerId}-viewer`, stream);
-    // otherwise wait for media to start- user might not accept permissions right away
-    else
-        video.onplay = () => call = peer.call(`${peerId}-viewer`, stream);
+    // try datachannel
+    let conn = peer.connect(`${peerId}-viewer`);
+    conn.on('data', data => console.log(`Incoming data: ${data}`));
+    conn.on('connection', ()=>{
+       conn.send("hello");
+    });
 
-    console.log(`started call`, call);
+
+
+    if (window.stream && window.stream.active) {
+        let call = peer.call(`${peerId}-viewer`, window.stream);
+        console.log(`started call`, call);
+
+    }
+    // otherwise wait for media to start- user might not accept permissions right away
+    /*
+    else
+
+
+    video.onplay = () => {
+            let call = peer.call(`${peerId}-viewer`, window.stream);
+            console.log(`started call`, call);
+        }*/
 
 });
 
@@ -43,11 +67,50 @@ peer.on('close', () => console.log("Peer closed"));
 peer.on('disconnected', () => console.log("Peer disconnected"));
 
 
+
+
+/**
+ *  Audio from webaudio
+ */
+// ToDo: Check for user gesture first - see: https://stackoverflow.com/questions/59150956/best-solution-for-unlocking-web-audio
+function makeFakeAudio() {
+    let audioCtx = new AudioContext();
+    let streamDestination = audioCtx.createMediaStreamDestination();
+
+    //Brown noise
+
+    let bufferSize = 2 * audioCtx.sampleRate,
+        noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate),
+        output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+    }
+
+    let noise = audioCtx.createBufferSource();
+    noise.buffer = noiseBuffer;
+    noise.loop = true;
+    noise.start(0);
+
+    // https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Advanced_techniques#adding_a_biquad_filter_to_the_mix
+
+    let bandpass = audioCtx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 1000;
+
+    // lower the volume
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = 0.2; // set to 0.1 or lower
+
+    noise.connect(bandpass).connect(gainNode).connect(streamDestination);
+
+    return streamDestination.stream;
+}
+
 /**
  * Canvas animation + webaudio for standby screen
  */
 // ToDo: this isn't working in pop-up
-function getStandbyStream(width = 1280, height = 720, framerate = 30) {
+async function standbyFromCanvas(width = 1280, height = 720, framerate = 30) {
 
     /*
      *  Video from canvas
@@ -55,7 +118,7 @@ function getStandbyStream(width = 1280, height = 720, framerate = 30) {
     let canvas = document.createElement('canvas');
     canvas.id = "phonecamStandby";
 
-    function makeFakeVideo() {
+    function videoFromCanvas() {
 
         let ctx = canvas.getContext('2d');
         canvas.width = width;
@@ -98,55 +161,28 @@ function getStandbyStream(width = 1280, height = 720, framerate = 30) {
     }
 
 
-    /**
-     *  Audio from webaudio
-     */
-    // ToDo: Check for user gesture first - see: https://stackoverflow.com/questions/59150956/best-solution-for-unlocking-web-audio
-    function makeFakeAudio() {
-        let audioCtx = new AudioContext();
-        let streamDestination = audioCtx.createMediaStreamDestination();
-
-        //Brown noise
-
-        let bufferSize = 2 * audioCtx.sampleRate,
-            noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate),
-            output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = Math.random() * 2 - 1;
-        }
-
-        let noise = audioCtx.createBufferSource();
-        noise.buffer = noiseBuffer;
-        noise.loop = true;
-        noise.start(0);
-
-        // https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Advanced_techniques#adding_a_biquad_filter_to_the_mix
-
-        let bandpass = audioCtx.createBiquadFilter();
-        bandpass.type = 'bandpass';
-        bandpass.frequency.value = 1000;
-
-        // lower the volume
-        const gainNode = audioCtx.createGain();
-        gainNode.gain.value = 0.2; // set to 0.1 or lower
-
-        noise.connect(bandpass).connect(gainNode).connect(streamDestination);
-
-        return streamDestination.stream;
-    }
-
-    let videoTrack = makeFakeVideo().getVideoTracks()[0];
+    let videoTrack = videoFromCanvas().getVideoTracks()[0];
     let audioTrack = makeFakeAudio().getAudioTracks()[0];
 
     let standbyStream = new MediaStream([videoTrack, audioTrack]);
     console.log("created standbyStream", standbyStream.getTracks());
+
+
+    // ToDo: added for debugging
+    let video = document.createElement('video');
+    video.autoplay = true;
+    video.playsinline = true;
+    video.srcObject = standbyStream;
+    video.play().then(()=>console.log("video playing"));
+
+
     return standbyStream;
 }
 
-async function getStandbyStream2(width = 1280, height = 720, framerate = 30) {
+async function standbyFromVideo(width = 1280, height = 720, framerate = 15) {
 
     // Get video from a file
-    async function getVideo() {
+    async function videoFromVideo() {
         return new Promise(async (resolve, reject) => {
             let standbyVideoElem = document.createElement('video');
             standbyVideoElem.id = "phonecamStandby";
@@ -164,64 +200,69 @@ async function getStandbyStream2(width = 1280, height = 720, framerate = 30) {
             standbyVideoElem.addEventListener('playing', () => {
                 console.log("playing");
                 resolve(capStream);
-
             });
 
             await standbyVideoElem.play();
-            return capStream
+            //return capStream
 
         });
 
     }
 
-    // Get audio from webaudio
-    function makeFakeAudio() {
-        let audioCtx = new AudioContext();
-        let streamDestination = audioCtx.createMediaStreamDestination();
-
-        //Brown noise
-
-        let bufferSize = 2 * audioCtx.sampleRate,
-            noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate),
-            output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = Math.random() * 2 - 1;
-        }
-
-        let noise = audioCtx.createBufferSource();
-        noise.buffer = noiseBuffer;
-        noise.loop = true;
-        noise.start(0);
-
-        // https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Advanced_techniques#adding_a_biquad_filter_to_the_mix
-
-        let bandpass = audioCtx.createBiquadFilter();
-        bandpass.type = 'bandpass';
-        bandpass.frequency.value = 1000;
-
-        // lower the volume
-        const gainNode = audioCtx.createGain();
-        gainNode.gain.value = 0.05; // set to 0.1 or lower
-
-        noise.connect(bandpass).connect(gainNode).connect(streamDestination);
-
-        return streamDestination.stream;
-    }
-
-
     //console.log("stream", stream.getTracks());
 
-    let video = await getVideo();
+    let video = await videoFromVideo();
 
     let videoTrack = video.getVideoTracks()[0];
     let audioTrack = makeFakeAudio().getAudioTracks()[0];
 
     // ToDo: this is returning a promise, not a stream
     //return new MediaStream([videoTrack, audioTrack]);
-    let standbyStream = await new MediaStream([videoTrack, audioTrack]);
+    let standbyStream = await new MediaStream([audioTrack, videoTrack]);
     console.log("created standbyStream", standbyStream.getTracks());
     return standbyStream
-    // not sure where this prmomise is coming from
+    // not sure where this promise is coming from
     //standbyStream.then(stream=>{return stream})
 
 }
+
+function videoFromImage(width = 1280, height = 720, framerate = 1) {
+
+    const img = document.querySelector('img');
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.display = "none";
+
+    const ctx = canvas.getContext('2d');
+
+    ctx.drawImage(img, 0,0, 1280, 720);
+
+    let stream = canvas.captureStream();
+    console.log("image stream", stream);
+    // stream.getVideoTracks()[0].requestFrame();
+    return stream
+
+}
+
+async function standbyFromImage(width = 1280, height = 720, framerate = 5) {
+    let video = await videoFromImage();
+
+
+    let videoTrack = video.getVideoTracks()[0];
+    let audioTrack = makeFakeAudio().getAudioTracks()[0];
+
+    let standbyStream = await new MediaStream([videoTrack, audioTrack]);
+    console.log("created standbyStream", standbyStream.getTracks());
+    return standbyStream
+}
+
+
+/*
+    let videoElem = document.createElement('video');
+    videoElem.plansinline = true;
+    videoElem.muted = true;
+    videoElem.src = video;
+    videoElem.play();
+ */

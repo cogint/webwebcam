@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Stream from Image</title>
+</head>
+<body>
+<img src="peerjs-extension/webrtcHacks.gif" alt="test image" style="display:none">
+<video autoplay playsinline muted controls></video>
+<script>
+
+    const img = document.querySelector('img');
+
+    // Can't get a stream from an image
+    // let stream = img.captureStream();
+    // Uncaught TypeError: source.captureStream is not a function
+
+    const video = document.querySelector('video');
+    let stream;
+
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    canvas.style.display = "none";
+
+    const ctx = canvas.getContext('2d');
+    img.addEventListener('load', e => {
+        console.log("image loaded");
+        ctx.drawImage(img, 0,0, 1280, 720);
+
+        stream = canvas.captureStream(5);
+        // stream.getVideoTracks()[0].requestFrame();
+        video.srcObject = stream;
+
+    });
+
+
+
+
+</script>
+</body>
+</html>

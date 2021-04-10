@@ -226,7 +226,7 @@ async function standbyFromVideo(width = 1280, height = 720, framerate = 15) {
 
 }
 
-function videoFromImage(width = 1280, height = 720, framerate = 1) {
+function videoFromImage(width = 1280, height = 720, framerate = 10) {
 
     const img = document.querySelector('img');
 
@@ -237,11 +237,13 @@ function videoFromImage(width = 1280, height = 720, framerate = 1) {
 
     const ctx = canvas.getContext('2d');
 
-    ctx.drawImage(img, 0,0, 1280, 720);
+    // Needed otherwise the remote video never starts
+    setInterval(()=>{
+        ctx.drawImage(img, 0,0, width, height);
+    }, 1/framerate);
 
-    let stream = canvas.captureStream();
+    let stream = canvas.captureStream(framerate);
     console.log("image stream", stream);
-    // stream.getVideoTracks()[0].requestFrame();
     return stream
 
 }

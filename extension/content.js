@@ -32,7 +32,11 @@ document.addEventListener('phonecam-inject', async e => {
 
 function backgroundMessageHandler(message) {
     console.log("phonecam content: background.js message", message);
-    if (!message.phonecam) {
+    if (!message) {
+        console.info("phonecam content: missing message from background.js", message);
+        return
+    }
+    else if (!message.phonecam) {
         console.info("phonecam content: Unrecognized message from background.js", message);
         return
     }
@@ -83,9 +87,9 @@ chrome.runtime.onMessage.addListener(
 let peerId, enabled;
 
 // Get values from local storage before injecting
-chrome.storage.local.get(['phonecamPeerId', 'phonecamEnabled'], async result => {
+chrome.storage.local.get(['phonecamPeerId', 'webwebcamEnabled'], async result => {
     peerId = result.phonecamPeerId || null;
-    enabled = result.phonecamEnabled || false;
+    enabled = result.webwebcamEnabled || false;
     console.log(`peerId: ${peerId}, enabled: ${enabled}`);
 
     // https://stackoverflow.com/questions/9515704/use-a-content-script-to-access-the-page-context-variables-and-functions
@@ -107,8 +111,8 @@ chrome.storage.local.get(['phonecamPeerId', 'phonecamEnabled'], async result => 
                 scriptText = scriptText.replace("let peerId", `let peerId = "${peerId}"`);
 
             if (enabled !== null)
-                scriptText = scriptText.replace("let phonecamEnabled = true",
-                    `let phonecamEnabled = ${enabled === "enabled"}`);
+                scriptText = scriptText.replace("let appEnabled = true",
+                    `let appEnabled = ${enabled === "enabled"}`);
 
             // console.log(scriptText);
             script.textContent = scriptText;

@@ -86,14 +86,15 @@ window.popupOpen = function popupOpen() {
 
 let lastState = "disconnected";
 window.peerState = function peerState(state) {
-    if(!state){
+    if (!state) {
         return lastState;
-    }
-    else {
+    } else {
         console.log(`Updated peerState: ${state}`);
-        sendToTabs({peerState: state});
+
+        // ToDo: rethink tab comms
+        // sendToTabs({peerState: state});
         lastState = state;
-        return(state);
+        return (state);
     }
 };
 
@@ -101,7 +102,7 @@ window.peerState = function peerState(state) {
 // Status text shown on the popup
 let lastMessage = "waiting for initialization";
 window.updateStatusMessage = function updateStatusMessage(message) {
-    if(!message){
+    if (!message) {
         return lastMessage
     } else {
 
@@ -136,7 +137,7 @@ let enabled = localStorage.getItem("enabled");
 console.log(`enabled is set to ${enabled}`);
 if (enabled !== null) {
     window.enabled = enabled;
-    chrome.storage.local.set({'phonecamEnabled': enabled}, () => {
+    chrome.storage.local.set({'webwebcamEnabled': enabled}, () => {
     });
 } else {
     // Default to enabled
@@ -149,7 +150,7 @@ updateStatusMessage("phonecam not connected");
  * peer.js setup
  */
 
-
+let standbyStream = false;
 let peer = new Peer(`${peerId}-ext`, {debug: 0});
 
 function handlePeerDisconnect(e) {
@@ -163,26 +164,61 @@ function handlePeerDisconnect(e) {
 }
 
 
-peer.on('open', id => {
-    peerState("open");
-    console.log(`My peer ID is ${id}. Waiting for connection from phone.js`)
+peer.on('open', async id => {
+    peerState("waiting");
+    console.log(`My peer ID is ${id}. Waiting for connections`);
+
+    // I needed to put this somewhere for async
+    standbyStream = await getStandbyStream();
+
 });
 
 peer.on('connection', conn => {
 
-    peerState("connected");
-    // ToDo: update pop-up
-    updateStatusMessage("phonecam available");
-    qrInfo.classList.add('d-none');
+    // ToDo: separate between phone & page for the message below - opens QR panel in popup
+    // peerState("connected");
 
-    conn.on('open', ()=> {
-        console.log(`Datachannel open`);  //${conn.id}`);
-        conn.on('data', data => console.log(`Incoming data from ${conn.peer}: ${data}`));
 
-        conn.send("hello");
+
+    conn.on('open', () => {
+            console.log(`Datachannel open with ${conn.peer}`);  //${conn.id}`);
+            // conn.on('data', data => console.log(`Incoming data from ${conn.peer}: ${data}`));
+            // conn.send("hello");
+
+            if(conn.peer === `${peerId}-phone`){
+                updateStatusMessage("phonecam available");
+                qrInfo.classList.add('d-none');
+            } else if(conn.peer === `${peerId}-page`){
+
+                if (window.stream && window.stream.active) {
+                    let call = peer.call(`${peerId}-page`, window.stream);
+                    console.log(`started call`, call);
+
+                }
+
+                console.log("initiating call to page with standbyStream", standbyStream);
+                peer.call(`${peerId}-page`, standbyStream);
+            }
+            else {
+                console.log("unrecognized peer");
+
+            }
 
         }
     );
+
+
+
+    // This is happening twice
+    conn.on('data', data => {
+        console.log(`Incoming data: ${data}`);
+
+        if(data === "call me"){
+            console.log("initiating call to page with standbyStream", standbyStream);
+            peer.call(`${peerId}-page`, standbyStream);
+        }
+
+    })
 
     /*
     conn.on('close', () => {
@@ -209,9 +245,9 @@ peer.on('close', () => {
 peer.on('disconnected', handlePeerDisconnect);
 
 peer.on('call', call => {
-    console.log("incoming call");
+    console.log("incoming call", call);
     call.answer();
-    call.on('stream', stream=>{
+    call.on('stream', stream => {
         previewVideo.srcObject = stream;
         window.stream = stream;
 
@@ -220,3 +256,80 @@ peer.on('call', call => {
         console.log(`stream ${stream.id} attached to pop-up preview window`);
     });
 });
+
+
+/**
+ * image + webaudio for standby screen
+ */
+
+async function getStandbyStream(width = 1920, height = 1080, framerate = 10) {
+
+    function videoFromImage() {
+
+        const img = new Image();
+        img.src = "assets/standby.png";
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.display = "none";
+
+        const ctx = canvas.getContext('2d');
+
+        // Needed otherwise the remote video never starts
+        setInterval(()=>{
+            ctx.drawImage(img, 0,0, width, height);
+        }, 1/framerate);
+
+        let stream = canvas.captureStream(framerate);
+        console.log("image stream", stream);
+        return stream
+
+    }
+
+    function makeFakeAudio() {
+        let audioCtx = new AudioContext();
+        let streamDestination = audioCtx.createMediaStreamDestination();
+
+        //Brown noise
+
+        let bufferSize = 2 * audioCtx.sampleRate,
+            noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate),
+            output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+        }
+
+        let noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        noise.loop = true;
+        noise.start(0);
+
+        // https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Advanced_techniques#adding_a_biquad_filter_to_the_mix
+
+        let bandpass = audioCtx.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.value = 1000;
+
+        // lower the volume
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.value = 0.2; // set to 0.1 or lower
+
+        noise.connect(bandpass).connect(gainNode).connect(streamDestination);
+
+        return streamDestination.stream;
+    }
+
+
+    let video = await videoFromImage();
+
+    let videoTrack = video.getVideoTracks()[0];
+    let audioTrack = makeFakeAudio().getAudioTracks()[0];
+
+    let standbyStream = await new MediaStream([videoTrack, audioTrack]);
+    console.log("created standbyStream", standbyStream.getTracks());
+    return standbyStream
+
+}
+
+

@@ -12,14 +12,14 @@ let appEnabled = true;     // is phoneCam enabled? // ToDo: find an instant way 
  */
 function logger(...message) {
     /*
-    document.dispatchEvent(new CustomEvent('phonecam-inject', {
+    document.dispatchEvent(new CustomEvent('webwebcam-inject', {
         detail: {
             // sourceUrl: window.location.href,
             entity: 'inject.js',
             logger: message
         }
     }));*/
-    console.log('phonecam inject: ', message.length === 1 ? message[0] : JSON.stringify(message));
+    console.log('webwebcam inject: ', message.length === 1 ? message[0] : JSON.stringify(message));
 }
 
 
@@ -56,7 +56,7 @@ async function connectPeer() {
     // ToDo: update this - handler was removed in content.js
     if (!peerId) {
         // ToDo: prevent multiple dispatches before a response
-        document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'getId'}}));
+        document.dispatchEvent(new CustomEvent('webwebcam-inject', {detail: {message: 'getId'}}));
         return;
     }
 
@@ -81,7 +81,7 @@ async function connectPeer() {
     async function handlePeerDisconnect(e) {
         connected = false;
         logger("peer disconnected event", e);
-        // document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'disconnected'}}));
+        // document.dispatchEvent(new CustomEvent('webwebcam-inject', {detail: {message: 'disconnected'}}));
     }
 
     peer.on('disconnected', handlePeerDisconnect);
@@ -100,7 +100,7 @@ async function connectPeer() {
             extStream = stream;
 
             connected = true;
-            // document.dispatchEvent(new CustomEvent('phonecam-inject', {detail: {message: 'connected'}}));
+            // document.dispatchEvent(new CustomEvent('webwebcam-inject', {detail: {message: 'connected'}}));
 
         });
 
@@ -136,22 +136,22 @@ async function shimGetUserMedia(constraints) {
 
     await connectPeer();
 
-    // Keep the original constraints so we can apply them to the phonecam track later
+    // Keep the original constraints so we can apply them to the webwebcam track later
     const origConstraints = {...constraints};
     logger("gum requested; original constraints:", origConstraints);
 
     let hasAudio = "audio" in constraints && constraints.audio !== false;
     let hasVideo = "video" in constraints && constraints.video !== false;
 
-    // Check if we should override gUM with our own stream if phoneCam is requested
+    // Check if we should override gUM with our own stream if webwebcam is requested
     let swapAudio = false;
-    if (hasAudio && JSON.stringify(constraints.audio).includes('phonecam')) {
+    if (hasAudio && JSON.stringify(constraints.audio).includes('webwebcam')) {
         swapAudio = true;
         constraints.audio = false;
     }
 
     let swapVideo = false;
-    if (hasVideo && JSON.stringify(constraints.video).includes('phonecam')) {
+    if (hasVideo && JSON.stringify(constraints.video).includes('webwebcam')) {
         swapVideo = true;
         constraints.video = false;
     }
@@ -193,24 +193,24 @@ async function shimGetUserMedia(constraints) {
 
     // Nothing to change - only if swapAudio & swapVideo are BOTH false (XOR)
     if (!swapAudio && swapAudio === swapVideo) {
-        logger("phonecam not selected for audio or video, so just passing this along to gUM");
+        logger("webwebcam not selected for audio or video, so just passing this along to gUM");
         return origGetUserMedia(constraints)
     }
 
-    // If there are only phonecam sources to return
+    // If there are only webwebcam sources to return
     else if ((swapAudio && !hasVideo) || (swapVideo && !hasAudio) || (swapAudio && swapVideo)) {
         return new Promise(async (resolve, reject) => {
             try {
                 let stream = await swapTracks(new MediaStream());
-                logger(`created a new stream with just phonecam tracks: ${stream.id}`);
+                logger(`created a new stream with just webwebcam tracks: ${stream.id}`);
                 resolve(stream);
             } catch (err) {
-                logger(`Failed to create phonecam stream: ${err}`);
+                logger(`Failed to create webwebcam stream: ${err}`);
                 reject(err);
             }
         })
     }
-    // if there is one phonecam source and one other source
+    // if there is one webwebcam source and one other source
     else if ((swapAudio && hasVideo) || (swapVideo && hasAudio)) {
 
         return new Promise(async (resolve, reject) => {
@@ -220,7 +220,7 @@ async function shimGetUserMedia(constraints) {
                 logger(`Added an ${swapAudio ? "video" : "audio"} track to existing stream ${stream.id}`);
                 resolve(stream);
             } catch (err) {
-                logger("phonecam: uncaught error", err);
+                logger("webwebcam: uncaught error", err);
                 reject(err);
             }
         })
@@ -292,7 +292,7 @@ function enumDevicesShim() {
         return origEnumerateDevices().then(async devices => {
 
                 // Connect if not already connected
-                await connectPeer();
+                // await connectPeer();
 
                 // logger("enumerateDevices shim");
 
@@ -308,21 +308,21 @@ function enumDevicesShim() {
 
                 // InputDeviceInfo.prototype + getCapabilities override
 
-                // ToDo: adjust these capabilities based on the phoneCam stream?
+                // ToDo: adjust these capabilities based on the webwebcam stream?
                 let fakeVideoDevice = {
                     __proto__: InputDeviceInfo.prototype,
-                    deviceId: "phonecam-video",
+                    deviceId: "webwebcam-video",
                     kind: "videoinput",
-                    label: noLabel ? "" : "phonecam-video",
-                    groupId: noLabel ? "" : "phonecam",
+                    label: noLabel ? "" : "webwebcam-video",
+                    groupId: noLabel ? "" : "webwebcam",
                     getCapabilities: () => {
                         logger("fake video capabilities?");
                         return {
                             aspectRatio: {max: 1920, min: 0.000925925925925926},
-                            deviceId: noLabel ? "" : "phonecam-video",
+                            deviceId: noLabel ? "" : "webwebcam-video",
                             facingMode: [],
                             frameRate: {max: 30, min: 1},
-                            groupId: noLabel ? "" : "phonecam",
+                            groupId: noLabel ? "" : "webwebcam",
                             height: {max: 1080, min: 1},
                             resizeMode: ["none", "crop-and-scale"],
                             width: {max: 1920, min: 1}
@@ -331,10 +331,10 @@ function enumDevicesShim() {
                     toJSON: () => {
                         return {
                             __proto__: InputDeviceInfo.prototype,
-                            deviceId: "phonecam-video",
+                            deviceId: "webwebcam-video",
                             kind: "videoinput",
-                            label: noLabel ? "" : "phonecam-video",
-                            groupId: noLabel ? "" : "phonecam",
+                            label: noLabel ? "" : "webwebcam-video",
+                            groupId: noLabel ? "" : "webwebcam",
                         }
                     }
 
@@ -343,18 +343,18 @@ function enumDevicesShim() {
 
                 let fakeAudioDevice = {
                     __proto__: InputDeviceInfo.prototype,
-                    deviceId: "phonecam-audio",
+                    deviceId: "webwebcam-audio",
                     kind: noLabel ? "" : "audioinput",
-                    label: "phonecam-audio",
-                    groupId: noLabel ? "" : "phonecam",
+                    label: "webwebcam-audio",
+                    groupId: noLabel ? "" : "webwebcam",
                     getCapabilities: () => {
                         logger("fake audio capabilities?");
                         return {
                             autoGainControl: [true, false],
                             channelCount: {max: 2, min: 1},
-                            deviceId: noLabel ? "" : "phonecam-audio",
+                            deviceId: noLabel ? "" : "webwebcam-audio",
                             echoCancellation: [true, false],
-                            groupId: noLabel ? "" : "phonecam",
+                            groupId: noLabel ? "" : "webwebcam",
                             latency: {max: 0.002902, min: 0},
                             noiseSuppression: [true, false],
                             sampleRate: {max: 48000, min: 44100},
@@ -364,10 +364,10 @@ function enumDevicesShim() {
                     toJSON: () => {
                         return {
                             __proto__: InputDeviceInfo.prototype,
-                            deviceId: "phonecam-audio",
+                            deviceId: "webwebcam-audio",
                             kind: noLabel ? "" : "audioinput",
-                            label: "phonecam-audio",
-                            groupId: noLabel ? "" : "phonecam",
+                            label: "webwebcam-audio",
+                            groupId: noLabel ? "" : "webwebcam",
                         }
                     }
                 };
@@ -408,7 +408,7 @@ window.addEventListener('beforeunload', () => {
 }, {passive: true});
 
 
-document.addEventListener('phonecam-content', e => {
+document.addEventListener('webwebcam-content', e => {
     logger('content.js event data', e.detail);
 
     if (e.detail.enabled) {
@@ -424,7 +424,7 @@ document.addEventListener('phonecam-content', e => {
             return
         }
 
-        logger(`phonecamEnabled is now ${appEnabled}`);
+        logger(`appEnabled is now ${appEnabled}`);
 
         // ToDo: this disable / enable isn't working right
         // I think I need to keep shims always active for it to work

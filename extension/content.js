@@ -1,22 +1,22 @@
 // Content script
 
-// Note: JS context not shared with page - Doesn't work: window.plogger = (msg)=>console.log(`phonecam content.js: ${msg}`);
+// Note: JS context not shared with page - Doesn't work: window.plogger = (msg)=>console.log(`webwebcam content.js: ${msg}`);
 
 /*
  * Communicate with the injected content
  */
 
 const sendToInject = message => {
-    console.log("phonecam content: sending this to inject.js", message);
-    document.dispatchEvent(new CustomEvent('phonecam-content', {detail: message}));
+    console.log("webwebcam content: sending this to inject.js", message);
+    document.dispatchEvent(new CustomEvent('webwebcam-content', {detail: message}));
 };
 
-document.addEventListener('phonecam-inject', async e => {
+document.addEventListener('webwebcam-inject', async e => {
     if (!e.detail)
         return;
 
     let data = e.detail;
-    console.log("phonecam content: inject event data:", JSON.stringify(data));
+    console.log("webwebcam content: inject event data:", JSON.stringify(data));
 
     // ToDo: add handlers for connected, disconnected
     if (data.message) {
@@ -31,19 +31,19 @@ document.addEventListener('phonecam-inject', async e => {
  */
 
 function backgroundMessageHandler(message) {
-    console.log("phonecam content: background.js message", message);
+    console.log("webwebcam content: background.js message", message);
     if (!message) {
-        console.info("phonecam content: missing message from background.js", message);
+        console.info("webwebcam content: missing message from background.js", message);
         return
     }
-    else if (!message.phonecam) {
-        console.info("phonecam content: Unrecognized message from background.js", message);
+    else if (!message.webwebcam) {
+        console.info("webwebcam content: Unrecognized message from background.js", message);
         return
     }
 
 
     // ToDo: rename active to enabled; use "active" for streams, "enabled" for on/off
-    let data = message.phonecam;
+    let data = message.webwebcam;
 
     if (data === "ACK")
         return;
@@ -69,7 +69,7 @@ function backgroundMessageHandler(message) {
 }
 
 function sendToBackground(message) {
-    chrome.runtime.sendMessage({phonecam: message}, backgroundMessageHandler);
+    chrome.runtime.sendMessage({webwebcam: message}, backgroundMessageHandler);
 }
 
 // Get initialization data from background.js
@@ -78,7 +78,7 @@ function sendToBackground(message) {
 // Listen for updates from background.js
 chrome.runtime.onMessage.addListener(
     (request, sender) => {
-        console.log("phonecam content: message from background.js", request, sender);
+        console.log("webwebcam content: message from background.js", request, sender);
         backgroundMessageHandler(request)
     }
 );
@@ -87,8 +87,8 @@ chrome.runtime.onMessage.addListener(
 let peerId, enabled;
 
 // Get values from local storage before injecting
-chrome.storage.local.get(['phonecamPeerId', 'webwebcamEnabled'], async result => {
-    peerId = result.phonecamPeerId || null;
+chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result => {
+    peerId = result.webwebcamPeerId || null;
     enabled = result.webwebcamEnabled || false;
     console.log(`peerId: ${peerId}, enabled: ${enabled}`);
 
@@ -131,4 +131,4 @@ chrome.storage.local.get(['phonecamPeerId', 'webwebcamEnabled'], async result =>
 
 sendToBackground("hello");
 
-console.log("phonecam content: content.js loaded");
+console.log("webwebcam content: content.js loaded");

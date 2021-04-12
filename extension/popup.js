@@ -31,7 +31,7 @@ function VanillaQR(r){var e=this;r="object"==typeof r?r:{},e.revision=3,e.imageT
 //Minus the url, these are the defaults
 let qr = new VanillaQR({
 
-    //url: JSON.stringify({phonecam: id}),
+    //url: JSON.stringify({webwebcam: id}),
     size: 300,
 
     colorLight: "#ffffff",
@@ -57,7 +57,7 @@ document.getElementById('qr').appendChild(qr.domElement);
 //You can recreate the qr code to a new url like so
 //If you have appended the domElement it will change
 /*
-qr.url = JSON.stringify({phonecam: UUID});
+qr.url = JSON.stringify({webwebcam: UUID});
 qr.colorLight = "#0000000";
 qr.colorDark = "#ffffff";
 qr.init(); */
@@ -114,7 +114,7 @@ backgroundWindow.previewVideo = previewVideo;
 function updateId(){
     const id = backgroundWindow.newId();
     idText.innerText = id;
-    qr.url = JSON.stringify({phonecam: id});
+    qr.url = JSON.stringify({webwebcam: id});
     qr.init();
 }
 
@@ -122,7 +122,7 @@ enabledCheckbox.onchange= (e)=>{
     let status = e.target.checked;
     qrInfo.hidden = !status;
     peerStatus.hidden = !enabledCheckbox.checked;
-    console.log(`changed phonecam status to: ${status ? "enabled": "disabled"}`);
+    console.log(`changed webwebcam status to: ${status ? "enabled": "disabled"}`);
     backgroundWindow.enabledChange(status ? "enabled": "disabled");
 };
 
@@ -131,7 +131,7 @@ if(!backgroundWindow.peerId){
     updateId();
 } else {
     idText.innerText = backgroundWindow.peerId;
-    qr.url = JSON.stringify({phonecam: backgroundWindow.peerId});
+    qr.url = JSON.stringify({webwebcam: backgroundWindow.peerId});
     qr.init();
 }
 

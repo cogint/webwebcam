@@ -7,19 +7,19 @@ chrome.runtime.onMessage.addListener(
     function (request, sender, sendResponse) {
         console.log(`message from tab ${sender.tab.id} on ${sender.tab.url}`, request);
 
-        if (request.phonecam)
+        if (request.webwebcam)
             lastActiveTabId = sender.tab.id;
         else {
-            console.info("received non phonecam request", request, sender);
+            console.info("received non webwebcam request", request, sender);
             return
         }
 
 
-        if (request.phonecam === "hello") {
-            sendResponse({phonecam: "ACK"}); // content.js backgroundMessageHandler throws an error without this
+        if (request.webwebcam === "hello") {
+            sendResponse({webwebcam: "ACK"}); // content.js backgroundMessageHandler throws an error without this
             console.log(`tab ${sender.tab.id} active`);
-        } else if (request.phonecam === "needData") {
-            let data = {phonecam: {active: enabled ? "active" : "inactive", peerId: peerId}};
+        } else if (request.webwebcam === "needData") {
+            let data = {webwebcam: {active: enabled ? "active" : "inactive", peerId: peerId}};
             sendResponse(data);
             console.log("sent this to content.js", data);
         }
@@ -31,7 +31,7 @@ function sendToTabs(message) {
     if (!lastActiveTabId)
         return;
     console.log(`sending this to ${lastActiveTabId}`, message);
-    chrome.tabs.sendMessage(lastActiveTabId, {phonecam: message}, null, null); //response callback removed
+    chrome.tabs.sendMessage(lastActiveTabId, {webwebcam: message}, null, null); //response callback removed
 }
 
 
@@ -76,7 +76,7 @@ statusMessage.innerText = "uninitialized";
 window.newId = function newId() {
     peerId = generateId(20);
     localStorage.setItem("peerId", peerId);
-    chrome.storage.local.set({'phonecamPeerId': peerId}, () => {
+    chrome.storage.local.set({'webwebcamPeerId': peerId}, () => {
     });
     window.peerId = peerId;
     console.log(`new peerId generated: ${peerId}`);
@@ -88,7 +88,7 @@ window.newId = function newId() {
 window.enabledChange = function enabledChange(state) {
     console.log(`Enabled set to ${state}`);
     localStorage.setItem("enabled", state);
-    chrome.storage.local.set({'phonecamEnabled': state}, () => {
+    chrome.storage.local.set({'webwebcamEnabled': state}, () => {
     });
     window.enabled = state;
     sendToTabs({enabled: state});
@@ -143,7 +143,7 @@ let peerId = localStorage.getItem("peerId");
 if (peerId) {
     window.peerId = peerId;
     console.log(`peerId loaded: ${peerId}`);
-    chrome.storage.local.set({'phonecamPeerId': peerId}, () => {
+    chrome.storage.local.set({'webwebcamPeerId': peerId}, () => {
     });
 } else {
     newId(true)
@@ -162,7 +162,7 @@ if (enabled !== null) {
     enabledChange(true, true)
 }
 
-updateStatusMessage("phonecam not connected");
+updateStatusMessage("remote not connected");
 
 /**
  * peer.js setup
@@ -178,7 +178,7 @@ let peer = new Peer(`${peerId}-ext`, {debug: 0});
 function handlePeerDisconnect(e) {
     // ToDo: send message to tabs
     console.log("peer disconnected from server. Attempting to reconnect", e);
-    updateStatusMessage("phonecam disconnected");
+    updateStatusMessage("webwebcam disconnected");
     peer.reconnect();
 
     window.qrInfo.classList.remove('d-none');
@@ -206,7 +206,7 @@ peer.on('connection', conn => {
             // conn.send("hello");
 
             if (conn.peer === `${peerId}-remote`) {
-                updateStatusMessage("phonecam available");
+                updateStatusMessage("webwebcam available");
                 qrInfo.classList.add('d-none');
 
                 peerState("connected");
@@ -244,7 +244,7 @@ peer.on('connection', conn => {
     conn.on('close', () => {
         //peerState("closed");
         // console.log(`Connection from peer ${conn.peer} closed`);
-        statusMessage("phonecam disconnected");
+        statusMessage("webwebcam disconnected");
         qrInfo.classList.remove('d-none');
         previewVideo.classList.add('d-none');
 
@@ -259,7 +259,7 @@ peer.on('connection', conn => {
 peer.on('close', () => {
     // console.log(`Connection closed`);
     peerState("closed");
-    updateStatusMessage("phonecam closed");
+    updateStatusMessage("webwebcam closed");
     window.qrInfo.classList.remove('d-none');
     window.preview.classList.add('d-none');
 });

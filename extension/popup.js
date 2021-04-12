@@ -88,7 +88,7 @@ peerStatus.innerText = backgroundWindow.updateStatusMessage();
 
 // Sync DOM elements with existing states
 let currentState = backgroundWindow.peerState();
-if(currentState === 'disconnected' || currentState === 'closed'){
+if(currentState === 'disconnected' || currentState === 'closed' || currentState === 'waiting'){
     qrInfo.classList.remove('d-none');
     preview.classList.add('d-none');
 }
@@ -96,7 +96,7 @@ else{
     qrInfo.classList.add('d-none');
     if(currentState === 'call'){
         preview.classList.remove('d-none');
-        previewVideo.srcObject = backgroundWindow.stream;
+        previewVideo.srcObject = backgroundWindow.activeStream;
 
     }
 }

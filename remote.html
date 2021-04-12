@@ -39,20 +39,21 @@
 </head>
 <body>
 <div class="container-fluid cover-container text-center d-flex flex-column">
-    <span id="warning"></span>
-    <div id="scanPermission" hidden >
+    <div class="row col-12 text-center">
+        <span id="status"></span>
+    </div>
+    <div id="scanPermission" class="row col d-none">
         <span>Open the phonecam extension first</span>
         <button id="scan" class="btn btn-primary">Scan QR code</button>
     </div>
-
-    <div class="video-container flex-fill vh-100">
+    <div class="video-container flex-fill vh-100 row col">
         <video class="mirror" autoplay playsinline muted></video>
         <div class="overlay">
             <button id="changeCam" class="btn bg-transparent"><i class="fas fa-sync-alt fa-4x"></i></button>
         </div>
     </div>
 
-    <script src="phone.js"></script>
+    <script src="remote.js"></script>
 </div>
 
 </body>

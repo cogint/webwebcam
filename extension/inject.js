@@ -67,7 +67,7 @@ async function connectPeer() {
 
         let conn = peer.connect(`${peerId}-ext`);
 
-        conn.on('open', ()=>{
+        conn.on('open', () => {
             logger("connected to ext");
             // conn.send("call me");
         })
@@ -89,14 +89,13 @@ async function connectPeer() {
     peer.on('call', call => {
 
         call.on('stream', stream => {
-            if(extStream.id === stream.id){
+            if (extStream.id === stream.id) {
                 console.log("duplicate stream. (bad peerjs)", stream);
                 return;
             }
             console.log("Got extStream", stream.getTracks());
 
-            // ToDo: stream is empty
-            debugVideo.srcObject = stream;
+            // debugVideo.srcObject = stream;
 
             extStream = stream;
 
@@ -115,6 +114,7 @@ async function connectPeer() {
         debugVideo.autoplay = true;
         debugVideo.controls = true;
         debugVideo.muted = true;
+
         document.body.appendChild(debugVideo);
          */
 
@@ -124,7 +124,7 @@ async function connectPeer() {
 
 }
 
-connectPeer().catch(err=>console.error(err));
+// connectPeer().catch(err=>console.error(err));
 
 // ToDo: respond here - https://stackoverflow.com/questions/42462773/mock-navigator-mediadevices-enumeratedevices
 
@@ -133,6 +133,8 @@ connectPeer().catch(err=>console.error(err));
  * getUserMedia shim
  */
 async function shimGetUserMedia(constraints) {
+
+    await connectPeer();
 
     // Keep the original constraints so we can apply them to the phonecam track later
     const origConstraints = {...constraints};
@@ -156,7 +158,7 @@ async function shimGetUserMedia(constraints) {
 
     // connect if it isn't already there
     //if (swapAudio || swapVideo)
-        //await connectPeer();
+    //await connectPeer();
 
     // Add extStream tracks to the supplied stream
     async function swapTracks(stream) {
@@ -214,7 +216,7 @@ async function shimGetUserMedia(constraints) {
         return new Promise(async (resolve, reject) => {
             try {
                 let stream = await origGetUserMedia(constraints);
-                stream  = await swapTracks(stream);
+                stream = await swapTracks(stream);
                 logger(`Added an ${swapAudio ? "video" : "audio"} track to existing stream ${stream.id}`);
                 resolve(stream);
             } catch (err) {
@@ -231,14 +233,14 @@ async function shimGetUserMedia(constraints) {
 const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
 function shimGum() {
-    if (shimActive){
+    if (shimActive) {
         console.log("gUM shim already active; skipping");
         return
     }
 
     //const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getUserMedia = async(constraints) => {
-        if(!appEnabled){
+    navigator.mediaDevices.getUserMedia = async (constraints) => {
+        if (!appEnabled) {
             return origGetUserMedia(constraints)
         }
 
@@ -250,7 +252,7 @@ function shimGum() {
     };
 
     let _webkitGetUserMedia = async function (constraints, onSuccess, onError) {
-        if(!appEnabled){
+        if (!appEnabled) {
             return _webkitGetUserMedia(constraints, onSuccess, onError)
         }
 
@@ -282,12 +284,15 @@ shimGum();
  */
 const origEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
 
-function enumDevicesShim(){
+function enumDevicesShim() {
     // logger("navigator.mediaDevices.enumerateDevices called");
     if (!appEnabled) {
         return origEnumerateDevices()
     } else
-        return origEnumerateDevices().then(devices => {
+        return origEnumerateDevices().then(async devices => {
+
+                // Connect if not already connected
+                await connectPeer();
 
                 // logger("enumerateDevices shim");
 
@@ -414,7 +419,7 @@ document.addEventListener('phonecam-content', e => {
 
         appEnabled = enabledState === "enabled";
 
-        if(currentPhonecamEnabled === appEnabled){
+        if (currentPhonecamEnabled === appEnabled) {
             logger(`No change to enabled state. It is still ${appEnabled}`);
             return
         }
@@ -430,13 +435,13 @@ document.addEventListener('phonecam-content', e => {
         if (appEnabled && enabledState === "disabled") {
             logger("ending any connection and disabling shims");
 
-            if (connected){
+            if (connected) {
                 peer.destroy();
                 appEnabled = false;
             }
 
-            if(standbyStream.enabled)
-                standbyStream.getTracks().forEach(track=>track.stop());
+            if (standbyStream.enabled)
+                standbyStream.getTracks().forEach(track => track.stop());
 
             // Reset gUM
             // navigator.mediaDevices.getUserMedia = origGetUserMedia;

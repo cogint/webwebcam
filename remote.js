@@ -315,7 +315,3 @@ camPermissions().then(async permission => {
         status.classList.add('d-none');
     }
 }).catch(err => errorHandler(err));
-
-
-// https://f8d1715bb8a2.ngrok.io/phone.html?nopeer
-// https://2189773fe177.ngrok.io/phone.html?id=9SZ81QrI5mzGNYtFFDDX

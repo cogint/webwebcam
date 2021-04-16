@@ -11,10 +11,10 @@ window.addEventListener('load', async () => {
     //ToDo: Debug
 
     //*** This shows a frozen green frame
-    // let stream = await standbyFromVideo(); // canvas+webaudio not working
+    let stream = await standbyFromVideo(); // canvas+webaudio not working
 
     //*** This requires clicking on the popup 5 times before the image shows
-    let stream = await standbyFromImage(); // canvas+webaudio not working
+    // let stream = await standbyFromImage(); // canvas+webaudio not working
 
     window.stream = stream;
     console.log(stream.getTracks());
@@ -110,7 +110,7 @@ function makeFakeAudio() {
  * Canvas animation + webaudio for standby screen
  */
 // ToDo: this isn't working in pop-up
-async function standbyFromCanvas(width = 1280, height = 720, framerate = 30) {
+async function standbyFromCanvas(width = 1920, height = 1080, framerate = 10) {
 
     /*
      *  Video from canvas
@@ -179,7 +179,7 @@ async function standbyFromCanvas(width = 1280, height = 720, framerate = 30) {
     return standbyStream;
 }
 
-async function standbyFromVideo(width = 1280, height = 720, framerate = 15) {
+async function standbyFromVideo(width = 1920, height = 1080, framerate = 10) {
 
     // Get video from a file
     async function videoFromVideo() {
@@ -192,7 +192,7 @@ async function standbyFromVideo(width = 1280, height = 720, framerate = 15) {
             standbyVideoElem.muted = true;
             standbyVideoElem.loop = true;
             standbyVideoElem.autoplay = true;
-            standbyVideoElem.src = "standby.mp4";
+            standbyVideoElem.src = "standby.webm";
             // document.body.appendChild(standbyVideoElem); //for debugging
 
             let capStream = standbyVideoElem.captureStream(framerate);
@@ -211,6 +211,13 @@ async function standbyFromVideo(width = 1280, height = 720, framerate = 15) {
 
     //console.log("stream", stream.getTracks());
 
+
+    // webM file has audio & video
+    let stream = await videoFromVideo();
+    console.log("created standbyStream", stream.getTracks());
+    return stream;
+
+    /*
     let video = await videoFromVideo();
 
     let videoTrack = video.getVideoTracks()[0];
@@ -221,12 +228,14 @@ async function standbyFromVideo(width = 1280, height = 720, framerate = 15) {
     let standbyStream = await new MediaStream([audioTrack, videoTrack]);
     console.log("created standbyStream", standbyStream.getTracks());
     return standbyStream
+
+     */
     // not sure where this promise is coming from
     //standbyStream.then(stream=>{return stream})
 
 }
 
-function videoFromImage(width = 1280, height = 720, framerate = 10) {
+function videoFromImage(width = 1920, height = 1080, framerate = 10) {
 
     const img = document.querySelector('img');
 
@@ -248,7 +257,7 @@ function videoFromImage(width = 1280, height = 720, framerate = 10) {
 
 }
 
-async function standbyFromImage(width = 1280, height = 720, framerate = 5) {
+async function standbyFromImage(width = 1920, height = 1080, framerate = 5) {
     let video = await videoFromImage();
 
 

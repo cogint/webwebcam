@@ -192,7 +192,8 @@ async function standbyFromVideo(width = 1920, height = 1080, framerate = 10) {
             standbyVideoElem.muted = true;
             standbyVideoElem.loop = true;
             standbyVideoElem.autoplay = true;
-            standbyVideoElem.src = "standby.webm";
+            standbyVideoElem.src = "standby" +
+                ".webm";
             // document.body.appendChild(standbyVideoElem); //for debugging
 
             let capStream = standbyVideoElem.captureStream(framerate);

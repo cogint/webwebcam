@@ -39,11 +39,11 @@
 </head>
 <body>
 <div class="container-fluid cover-container text-center d-flex flex-column">
-    <div class="row col-12 text-center">
+    <div class="row col text-center">
         <span id="status"></span>
     </div>
     <div id="scanPermission" class="row col d-none">
-        <span>Open the WebWebCam extension first</span>
+        <!--span>Open the WebWebCam extension first</span-->
         <button id="scan" class="btn btn-primary">Scan QR code</button>
     </div>
     <div class="video-container flex-fill vh-100 row col">
@@ -53,7 +53,7 @@
         </div>
     </div>
 
-    <script src="remote.js"></script>
+    <script type="module" src="remote.js"></script>
 </div>
 
 </body>

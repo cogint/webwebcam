@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>performance test</title>
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <style>
+        video {
+            height: 180px;
+            width: 320px;
+        }
+    </style>
+</head>
+<body>
+<button id="startStandby">Start with Standby</button>
+<button id="startGum">Start with gUM</button>
+<br>
+<video autoplay muted playsinline controls id="standby"></video>
+<br>
+<button id="callPeerTwo" disabled>Call Peer 1</button>
+<br>
+<video autoplay muted playsinline controls id="peerTwo"></video>
+<br>
+<button id="callPeerThree" disabled>Call Peer 2</button>
+<video autoplay muted playsinline controls id="peerThree"></video>
+<br>
+<button id="stopBtn" disabled>Stop all</button>
+
+<script async>
+    let startStandbyBtn = document.querySelector('#startStandby');
+    let startGumBtn = document.querySelector('#startGum');
+    let peerTwoBtn = document.querySelector('#callPeerTwo');
+    let peerThreeBtn = document.querySelector('#callPeerThree');
+    let stopBtn = document.querySelector('#stopBtn');
+
+    let standbyVid = document.querySelector('#standby');
+    let peerTwoVid = document.querySelector('#peerTwo');
+    let peerThreeVid = document.querySelector('#peerThree');
+
+    let interStageTime = 10 * 1000;
+
+    let automated = false;
+    let h264 = false;
+    let videoSrc = "standby";
+
+    const urlParams = new URLSearchParams(window.location.search);
+
+    if (urlParams.has("h264")) {
+        h264 = urlParams.get("h264").toLowerCase() === 'true';
+        console.log("h264 specified");
+    }
+
+    if (urlParams.has("videoSrc")) {
+        let videoSrcParam = urlParams.get("videoSrc").toLowerCase();
+        videoSrc = videoSrcParam === 'gum' ? 'gum' : 'standby';
+        console.log(`Setting the video source to ${videoSrc}`);
+    }
+
+    if (urlParams.has("interStageTime")) {
+        interStageTime = urlParams.get("interStageTime") * 1000.0;
+        if (typeof (interStageTime) === 'number') {
+            automated = true;
+            console.log("starting automated testing");
+            if (videoSrc === 'gum')
+                startGum();
+            else
+                startStandby();
+
+        }
+    }
+
+
+    function h264only(sdp) {
+
+        const aLinesRe = /a=rtpmap:(\d+)\sH264/g;
+        const h264maps = [...sdp.matchAll(aLinesRe)].map(m => m[1]);
+        // console.log(h264maps);
+
+        const mLineRe = /m=video\s\d+\s([[A-Z|\/]+)\s([0-9| ]+)/g;
+        const mLine = [...sdp.matchAll(mLineRe)][0];
+
+        console.log("original mLine", mLine[0]);
+
+        let newMaps = mLine[2];
+
+        h264maps.forEach(map => {
+            newMaps = newMaps.replace(`${map} `, "");
+        });
+        newMaps = h264maps.join(' ').concat(' ').concat(newMaps);
+        const newMline = mLine[0].replace(mLine[2], newMaps);
+        console.log("new mLine", newMline);
+
+        const newSdp = sdp.replace(mLine[0], newMline);
+
+        // console.log(newSdp);
+        return newSdp
+    }
+
+    /**
+     * image + webaudio for standby screen
+     */
+
+    async function getStandbyStream(width = 1920, height = 1080, framerate = 10) {
+
+        function videoFromImage() {
+
+            const img = new Image();
+            img.src = "../assets/standby.png";
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.display = "none";
+
+            const ctx = canvas.getContext('2d');
+
+            // Needed otherwise the remote video never starts
+            setInterval(() => {
+                ctx.drawImage(img, 0, 0, width, height);
+            }, 1 / framerate);
+
+            let stream = canvas.captureStream(framerate);
+            console.log("image stream", stream);
+            return stream
+
+        }
+
+        function makeFakeAudio() {
+            let audioCtx = new AudioContext();
+            let streamDestination = audioCtx.createMediaStreamDestination();
+
+            //Brown noise
+
+            let bufferSize = 2 * audioCtx.sampleRate,
+                noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate),
+                output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1;
+            }
+
+            let noise = audioCtx.createBufferSource();
+            noise.buffer = noiseBuffer;
+            noise.loop = true;
+            noise.start(0);
+
+            // https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Advanced_techniques#adding_a_biquad_filter_to_the_mix
+
+            let bandpass = audioCtx.createBiquadFilter();
+            bandpass.type = 'bandpass';
+            bandpass.frequency.value = 1000;
+
+            // lower the volume
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.value = 0.2; // set to 0.1 or lower
+
+            noise.connect(bandpass).connect(gainNode).connect(streamDestination);
+
+            return streamDestination.stream;
+        }
+
+
+        let video = await videoFromImage();
+
+        let videoTrack = video.getVideoTracks()[0];
+        let audioTrack = makeFakeAudio().getAudioTracks()[0];
+
+        let standbyStream = await new MediaStream([videoTrack, audioTrack]);
+        console.log("created standbyStream", standbyStream.getTracks());
+        return standbyStream
+
+    }
+
+
+    async function startStandby() {
+        let standbyStream = await getStandbyStream();
+        window.stream1 = standbyStream;
+
+        standbyVid.srcObject = standbyStream;
+
+        startStandbyBtn.disabled = true;
+        startGumBtn.disabled = true;
+        peerTwoBtn.disabled = false;
+
+        if (automated)
+            setTimeout(() => startPeerTwo(), interStageTime);
+
+    }
+
+
+    async function startGum() {
+        let gumStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+        window.stream1 = gumStream;
+
+        standbyVid.srcObject = gumStream;
+
+        startStandbyBtn.disabled = true;
+        startGumBtn.disabled = true;
+        peerTwoBtn.disabled = false;
+
+        if (automated)
+            setTimeout(() => startPeerTwo(), interStageTime);
+
+    }
+
+    let peer1, peer2, peer3;
+
+    function startPeerTwo() {
+
+        console.log("Standby=>Peer2");
+
+        peer1 = new Peer({debug: 0});
+        peer2 = new Peer({debug: 0});
+
+
+        peer1.on('open', id => {
+            console.log(`Connected to peerServer with id: ${id}`);
+            peer1.call(peer2.id, window.stream1, h264 ? {sdpTransform: h264only} : {});
+        });
+
+        peer2.on('open', id => {
+            console.log(`Connected to peerServer with id: ${id}`);
+
+            peer2.on('call', call => {
+                call.on('stream', stream => {
+                    window.stream2 = stream;
+                    peerTwoVid.srcObject = stream;
+
+                    peerTwoBtn.disabled = true;
+                    peerThreeBtn.disabled = false;
+
+                    if (automated)
+                        setTimeout(() => startPeerThree(), interStageTime);
+
+
+                });
+                call.answer();
+            })
+        });
+
+    }
+
+
+    function startPeerThree() {
+        peer3 = new Peer({debug: 0});
+
+        peer3.on('open', id => {
+            console.log(`Connected to peerServer with id: ${id}`);
+
+            peer3.on('call', call => {
+                call.on('stream', stream => {
+                    window.stream3 = stream;
+                    peerThreeVid.srcObject = stream;
+
+                    peerThreeBtn.disabled = true;
+                    stopBtn.disabled = false;
+
+                    if (automated)
+                        setTimeout(() => closeAll(), interStageTime);
+
+                });
+                call.answer();
+            });
+
+            peer2.call(peer3.id, window.stream2, h264 ? {sdpTransform: h264only} : {})
+
+        });
+    }
+
+    function closeAll() {
+        console.log("Stopping streams and destroying connections");
+        [window.stream1, window.stream2, window.stream3].forEach(stream => stream.getTracks().forEach(track => track.stop()));
+        peer1.destroy();
+        peer2.destroy();
+        peer3.destroy();
+    }
+
+    startStandbyBtn.onclick = startStandby;
+    startGumBtn.onclick = startGum;
+    peerTwoBtn.onclick = startPeerTwo;
+    peerThreeBtn.onclick = startPeerThree;
+    stopBtn.onClick = closeAll;
+
+
+</script>
+</body>
+</html>

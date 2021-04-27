@@ -1,3 +1,5 @@
+import {mungeH264} from "./modules/mungeH264.mjs";
+
 let video = document.querySelector('video');
 let changeCam = document.getElementById('changeCam');
 // let openCamBtn = document.getElementById('scanQr');
@@ -202,7 +204,7 @@ function extPeer(peerId) {
         // Send the preview video
         // Video should there
         if (stream && stream.active) {
-            let call = peer.call(`${peerId}-ext`, stream);
+            let call = peer.call(`${peerId}-ext`, stream, {sdpTransform: mungeH264});
             console.log("initiated preview stream call");
 
             call.on('close', ()=>{console.log("mediaConnection ended")})
@@ -309,9 +311,11 @@ camPermissions().then(async permission => {
     } else {
         status.innerText = "click anywhere to accept media permissions";
         console.log("Camera permissions denied; waiting for user");
-        permissions.classList.remove('d-none');
-        document.onclick = async () => stream = await getMedia(true);
-        video.srcObject = stream;
-        status.classList.add('d-none');
+        // permissions.classList.remove('d-none');
+        document.onclick = async () => {
+            stream = await getMedia(true);
+            video.srcObject = stream;
+            status.classList.add('d-none');
+        }
     }
 }).catch(err => errorHandler(err));

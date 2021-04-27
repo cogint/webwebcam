@@ -199,6 +199,7 @@ peer.on('open', async id => {
 
 peer.on('connection', conn => {
 
+    // console.log(`DataConnection to ${conn.peer}`);
     // ToDo: separate between remote & page for the message below - opens QR panel in popup
 
     conn.on('open', () => {
@@ -212,14 +213,16 @@ peer.on('connection', conn => {
                 peerState("connected");
             } else if (conn.peer === `${peerId}-page`) {
 
+                // ToDo: this is happening more than once
+
                 // this should always pass
                 if (activeStream && activeStream.active) {
                     let call = peer.call(`${peerId}-page`, activeStream);
                     console.log(`started call to page`, call);
                 }
 
-                console.log("initiating call to page with standbyStream", activeStream);
-                peer.call(`${peerId}-page`, activeStream);
+                // console.log("initiating call to page with standbyStream", activeStream);
+                // peer.call(`${peerId}-page`, activeStream);
             } else {
                 console.log("unrecognized peer");
 

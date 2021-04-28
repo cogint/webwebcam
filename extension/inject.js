@@ -41,6 +41,8 @@ async function connectPeer() {
         // ToDo: there is some error here
         //await fetch('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
 
+        let parcelRequire = null;
+
         // ToDo: pass / load the extension ID so it is updated below
         await fetch('chrome-extension://cemghnpnocjajchopfooodogjcdabglm/peerjs.min.js')
             .then(resp => resp.text())
@@ -87,6 +89,8 @@ async function connectPeer() {
     peer.on('disconnected', handlePeerDisconnect);
 
     peer.on('call', call => {
+        // ToDo: peerJs is showing multiple calls here with the same stream
+
 
         call.on('stream', stream => {
             if (extStream.id === stream.id) {

@@ -1,3 +1,5 @@
+import {getStandbyStream} from "../modules/simStream.mjs";
+
 /**
  * Content.js communication
  */
@@ -285,79 +287,5 @@ peer.on('call', call => {
     });
 });
 
-
-/**
- * image + webaudio for standby screen
- */
-
-async function getStandbyStream(width = 1920, height = 1080, framerate = 10) {
-
-    function videoFromImage() {
-
-        const img = new Image();
-        img.src = "assets/standby.png";
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        canvas.style.display = "none";
-
-        const ctx = canvas.getContext('2d');
-
-        // Needed otherwise the remote video never starts
-        setInterval(() => {
-            ctx.drawImage(img, 0, 0, width, height);
-        }, 1 / framerate);
-
-        let stream = canvas.captureStream(framerate);
-        console.log("image stream", stream);
-        return stream
-
-    }
-
-    function makeFakeAudio() {
-        let audioCtx = new AudioContext();
-        let streamDestination = audioCtx.createMediaStreamDestination();
-
-        //Brown noise
-
-        let bufferSize = 2 * audioCtx.sampleRate,
-            noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate),
-            output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = Math.random() * 2 - 1;
-        }
-
-        let noise = audioCtx.createBufferSource();
-        noise.buffer = noiseBuffer;
-        noise.loop = true;
-        noise.start(0);
-
-        // https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Advanced_techniques#adding_a_biquad_filter_to_the_mix
-
-        let bandpass = audioCtx.createBiquadFilter();
-        bandpass.type = 'bandpass';
-        bandpass.frequency.value = 1000;
-
-        // lower the volume
-        const gainNode = audioCtx.createGain();
-        gainNode.gain.value = 0.2; // set to 0.1 or lower
-
-        noise.connect(bandpass).connect(gainNode).connect(streamDestination);
-
-        return streamDestination.stream;
-    }
-
-
-    let video = await videoFromImage();
-
-    let videoTrack = video.getVideoTracks()[0];
-    let audioTrack = makeFakeAudio().getAudioTracks()[0];
-
-    let standbyStream = await new MediaStream([videoTrack, audioTrack]);
-    console.log("created standbyStream", standbyStream.getTracks());
-    return standbyStream
-
-}
 
 

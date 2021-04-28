@@ -7,7 +7,7 @@
       "run_at": "document_start"
    } ],
   "background": {
-    "scripts": ["peerjs.min.js", "background.js"],
+    "page": "background.html",
     "persistent": true
   },
   "browser_action": {

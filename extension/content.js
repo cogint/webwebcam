@@ -119,7 +119,7 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
 
             script.onload = () => this.remove;
             // ToDo: add to head or body? append or prepend?
-            (document.head || document.documentElement).appendChild(script);
+            (document.body || document.documentElement).appendChild(script);
 
         })
         .catch(console.error);

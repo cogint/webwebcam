@@ -170,8 +170,8 @@ updateStatusMessage("remote not connected");
  * peer.js setup
  */
 
-let standbyStream = false;
-let remoteStream = false;
+// let standbyStream = false;
+// let remoteStream = false;
 let activeStream = new MediaStream();
 window.previewVideo.srcObject = activeStream;
 
@@ -193,9 +193,9 @@ peer.on('open', async id => {
     console.log(`My peer ID is ${id}. Waiting for connections`);
 
     // I needed to put this somewhere for async
-    standbyStream = await getStandbyStream();
-    activeStream = standbyStream;
+    activeStream = await getStandbyStream({file: "assets/standby.webm"});
     window.previewVideo.srcObject = activeStream;
+    window.standbyStream = activeStream;
 
 });
 
@@ -221,6 +221,8 @@ peer.on('connection', conn => {
                 if (activeStream && activeStream.active) {
                     let call = peer.call(`${peerId}-page`, activeStream);
                     console.log(`started call to page`, call);
+                } else {
+                    console.error("issue with activeStream:", activeStream);
                 }
 
                 // console.log("initiating call to page with standbyStream", activeStream);
@@ -276,8 +278,8 @@ peer.on('call', call => {
     call.answer();
     call.on('stream', stream => {
         // Assume call is from remote.js for now
-        remoteStream = stream;
-        window.activeStream = activeStream = stream;
+        activeStream = stream;
+        window.remoteStream = stream; // for Debugging
 
         window.preview.classList.remove("d-none");
         window.previewVideo.srcObject = stream;
@@ -286,6 +288,3 @@ peer.on('call', call => {
         console.log(`remote stream ${stream.id}`);
     });
 });
-
-
-

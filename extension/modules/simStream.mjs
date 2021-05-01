@@ -2,40 +2,62 @@
  * Generates a stream from generated sources (not a webcam)
  */
 
-
+// ToDo: this stopped working in Chrome 92
 // Stream from a static image
-function videoFromImage(width = 1920, height = 1080, framerate = 10) {
+function videoFromImage(imageFile, width = 1920, height = 1080, frameRate = 10) {
 
-    const img = new Image();
-    img.src = "assets/standby.png";
+    try {
+        const img = new Image();
+        img.src = imageFile;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    canvas.style.display = "none";
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.display = "none";
 
-    const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d');
 
-    // ToDo: see if an requestAnimationFrame reduces CPU
+        // ToDo: see if an requestAnimationFrame reduces CPU
 
-    // Shift the image slightly every 2 seconds
-    const offset = 7;
-    const imgShiftTimer = 2* 1000;
-    let randOffset =  Math.floor(Math.random() * offset+1);
-    setInterval(()=>{
-        randOffset =  Math.floor(Math.random() * offset+1);
-    }, imgShiftTimer);
+        // Shift the image slightly every 2 seconds
+        const offset = 7;
+        const imgShiftTimer = 2* 1000;
+        let randOffset =  Math.floor(Math.random() * offset+1);
+        setInterval(()=>{
+            randOffset =  Math.floor(Math.random() * offset+1);
+        }, imgShiftTimer);
 
-    // Needed otherwise the remote video never starts
-    setInterval(() => {
-        // ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, randOffset, randOffset, width, height);
-    }, 1 / framerate);
+        // Needed otherwise the remote video never starts
+        setInterval(() => {
+            // ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, randOffset, randOffset, width, height);
+        }, 1 / frameRate);
 
-    let stream = canvas.captureStream(framerate);
-    console.log("image stream", stream);
-    return stream
+        let stream = canvas.captureStream(frameRate);
+        console.log("image stream", stream);
+        return stream
+    }
+    catch (err) {
+        console.error(err);
+    }
+}
 
+// Stream from a video file
+async function streamFromVideo(videoFile, width = 1920, height = 1080, frameRate = 10) {
+    let sourceVideo = document.createElement('video');
+    sourceVideo.src = videoFile;
+    sourceVideo.muted = true;
+    sourceVideo.loop = true;
+    await sourceVideo.play();
+
+    let stream = sourceVideo.captureStream();
+    console.log("videoFile stream", stream);
+
+    // ToDo: I don't think this worked
+    let videoTrack = stream.getVideoTracks()[0];
+    await videoTrack.applyConstraints({width: width, height: height, frameRate: frameRate} );
+
+    return stream;
 }
 
 
@@ -78,9 +100,15 @@ function audioFromWebAudio(volume = 0.05) {
 
 
 // combine audio + video
-export async function getStandbyStream(width = 1920, height = 1080, framerate = 10, volume=0.05) {
+export async function getStandbyStream({method='video', file, width = 1920, height = 1080, frameRate = 10, volume=0.05}) {
 
-    let video = await videoFromImage(width, height, framerate);
+    let video;
+
+    if(method==='video')
+        video = await streamFromVideo(file, width, height, frameRate);
+    else
+        video = await videoFromImage(file, width, height, frameRate);
+
 
     let videoTrack = video.getVideoTracks()[0];
     let audioTrack = audioFromWebAudio(volume).getAudioTracks()[0];

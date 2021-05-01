@@ -76,7 +76,6 @@ let peerStatus = document.getElementById('peerStatus');
 let preview = document.getElementById('preview');
 let previewVideo = document.querySelector('video');
 
-
 const backgroundWindow = chrome.extension.getBackgroundPage();
 
 
@@ -135,7 +134,23 @@ if(!backgroundWindow.peerId){
     qr.init();
 }
 
-
-
-
 button.onclick = ()=> updateId();
+
+document.addEventListener('keydown', e=>{
+    if(e.key === '.'){
+        console.log(`${e.key} pressed`);
+        preview.classList.toggle('d-none');
+    }
+
+    if(e.key === 's'){
+        previewVideo.srcObject = backgroundWindow.standbyStream;
+        console.log("set preview video to standbyStream");
+    }
+
+    if(e.key === 'r'){
+        previewVideo.srcObject = backgroundWindow.remoteStream;
+        console.log("set preview video to remoteStream");
+
+    }
+
+});

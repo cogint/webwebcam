@@ -221,7 +221,7 @@
             console.log(`Connected to peerServer with id: ${id}`);
 
             peer2.on('call', call => {
-                call.on('stream', stream => {
+                call.on('selfStream', stream => {
                     window.stream2 = stream;
                     peerTwoVid.srcObject = stream;
 
@@ -247,7 +247,7 @@
             console.log(`Connected to peerServer with id: ${id}`);
 
             peer3.on('call', call => {
-                call.on('stream', stream => {
+                call.on('selfStream', stream => {
                     window.stream3 = stream;
                     peerThreeVid.srcObject = stream;
 

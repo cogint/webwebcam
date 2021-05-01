@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebWebCam Debugging</title>
+    <!--script src="https://webrtc.github.io/adapter/adapter-latest.js"></script-->
+<style>
+    video {
+        height: 320px;
+    }
+</style>
+</head>
+<body>
+
+<h2>Local Stream</h2>
+<label for="videoSource">Video input source: </label>
+<select id="videoSource"></select>
+<br>
+<video id="self" autoplay playsinline muted controls></video>
+<hr>
+
+<h2>Remote Stream</h2>
+<video id="remote" autoplay playsinline muted controls></video>
+
+<script src="debug.js"></script>
+</body>
+</html>

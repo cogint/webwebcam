@@ -1,4 +1,4 @@
-import {mungeH264} from "./modules/mungeH264.mjs";
+import {mungeH264} from "./extension/modules/mungeH264.mjs";
 
 let video = document.querySelector('video');
 let changeCam = document.getElementById('changeCam');
@@ -60,7 +60,8 @@ async function getMedia(init=false) {
         video: {
             width: {ideal: 1920},
             height: {ideal: 1080}
-        }
+        },
+        audio: true
     };
 
     // ToDo: this is freezing my Pixel4xl
@@ -204,7 +205,8 @@ function extPeer(peerId) {
         // Send the preview video
         // Video should there
         if (stream && stream.active) {
-            let call = peer.call(`${peerId}-ext`, stream, {sdpTransform: mungeH264});
+            // ToD:  bug is preventing H.264 from working:
+            let call = peer.call(`${peerId}-ext`, stream); //, {sdpTransform: mungeH264});
             console.log("initiated preview stream call");
 
             call.on('close', ()=>{console.log("mediaConnection ended")})

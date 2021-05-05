@@ -3,13 +3,16 @@
 // ToDo: turn this back into an anonymous function
 
 let extStream = false;      // play something if no connection
-let connected = false;          // are we connected to the phone?
+let streamReady = false;          // are we connected to the phone?
 let shimActive = false;         // Checks to see if shim has been loaded
 let appEnabled = true;     // is phoneCam enabled? // ToDo: find an instant way to initialize this
 
 /*
  * helper function
  */
+
+
+
 function logger(...message) {
     /*
     document.dispatchEvent(new CustomEvent('webwebcam-inject', {
@@ -19,13 +22,21 @@ function logger(...message) {
             logger: message
         }
     }));*/
-    console.log('webwebcam inject: ', message.length === 1 ? message[0] : JSON.stringify(message));
+    //console.log('webwebcam inject: ', message.length === 1 ? message[0] : JSON.stringify(message));
+
+    const len = message.length;
+    if (len === 1)
+        console.log('webwebcam inject: ', message[0]);
+    else if (len === 2)
+        console.log('webwebcam inject: ', message[0], message[1]);
+    else
+        console.log('webwebcam inject: ', JSON.stringify(message.flat()));
 }
 
 
-/*
- * Start peer.js code
- */
+    /*
+     * Start peer.js code
+     */
 
 
 let peer;
@@ -75,14 +86,18 @@ async function connectPeer() {
         })
     });
 
+    // ToDo: this doesn't fire
     peer.on('connection', conn => {
-        conn.on('data', data => console.log(`Incoming data: ${data}`))
+        conn.on('data', data => logger(`Incoming data: ${data}`));
+        logger("connection:", conn);
+
     });
 
 
     async function handlePeerDisconnect(e) {
-        connected = false;
+        streamReady = false;
         logger("peer disconnected event", e);
+        peer.destroy();
         // document.dispatchEvent(new CustomEvent('webwebcam-inject', {detail: {message: 'disconnected'}}));
     }
 
@@ -94,33 +109,22 @@ async function connectPeer() {
 
         call.on('stream', stream => {
             if (extStream.id === stream.id) {
-                console.log("duplicate stream. (bad peerjs)", stream);
+                logger("duplicate stream. (bad peerjs)", stream);
                 return;
             }
-            console.log("Got extStream", stream.getTracks());
+            logger("Got extStream", stream.getTracks());
 
             // debugVideo.srcObject = stream;
 
             extStream = stream;
 
-            connected = true;
+            streamReady = true;
             // document.dispatchEvent(new CustomEvent('webwebcam-inject', {detail: {message: 'connected'}}));
 
         });
 
-        console.log("Answering incoming call", call);
+        logger("Answering incoming call", call.id);
         call.answer();
-
-        // ToDo: debugging
-
-        /*
-        let debugVideo = document.createElement('video');
-        debugVideo.autoplay = true;
-        debugVideo.controls = true;
-        debugVideo.muted = true;
-
-        document.body.appendChild(debugVideo);
-         */
 
         call.on('close', handlePeerDisconnect);
 
@@ -128,7 +132,9 @@ async function connectPeer() {
 
 }
 
-// connectPeer().catch(err=>console.error(err));
+
+if(appEnabled)
+    connectPeer().catch(err=>console.error(err));
 
 // ToDo: respond here - https://stackoverflow.com/questions/42462773/mock-navigator-mediadevices-enumeratedevices
 
@@ -137,8 +143,6 @@ async function connectPeer() {
  * getUserMedia shim
  */
 async function shimGetUserMedia(constraints) {
-
-    await connectPeer();
 
     // Keep the original constraints so we can apply them to the webwebcam track later
     const origConstraints = {...constraints};
@@ -149,44 +153,70 @@ async function shimGetUserMedia(constraints) {
 
     // Check if we should override gUM with our own stream if webwebcam is requested
     let swapAudio = false;
-    if (hasAudio && JSON.stringify(constraints.audio).includes('webwebcam')) {
-        swapAudio = true;
-        constraints.audio = false;
+    if (hasAudio){
+        let audioConstraints = JSON.stringify(constraints.audio);
+        if (audioConstraints.includes('webwebcam')){
+            // Check if extension stream has an audioTrack to replace; this shouldn't happen
+            if(!extStream.getAudioTracks || !extStream.getAudioTracks()[0].enabled){
+                logger("peer audio stream not available ");
+                audioConstraints.replace("webwebcam", "default");
+                constraints.audio = JSON.parse(audioConstraints);
+            }
+            else {
+                swapAudio = true;
+                constraints.audio = false
+            }
+        }
     }
 
     let swapVideo = false;
-    if (hasVideo && JSON.stringify(constraints.video).includes('webwebcam')) {
-        swapVideo = true;
-        constraints.video = false;
+    if (hasVideo){
+        let videoConstraints = JSON.stringify(constraints.video);
+        // Check if extension stream has an videoTrack to replace; this shouldn't happen
+        if (videoConstraints.includes('webwebcam')){
+            if(!extStream.getVideoTracks || !extStream.getVideoTracks()[0].enabled){
+                logger("peer video stream not available ");
+                videoConstraints.replace("webwebcam", "default");
+                constraints.video = JSON.parse(constraints.video);
+            }
+            else {
+                swapVideo = true;
+                constraints.video = false
+            }
+        }
     }
 
-    // connect if it isn't already there
-    //if (swapAudio || swapVideo)
-    //await connectPeer();
 
     // Add extStream tracks to the supplied stream
     async function swapTracks(stream) {
 
         if (swapAudio) {
-            let subsAudioTrack = extStream.getAudioTracks()[0].clone();
+            let extAudioTrack = extStream.getAudioTracks()[0];
 
             let audioTrackConstraints = {...origConstraints.audio};
             delete audioTrackConstraints.deviceId;
             delete audioTrackConstraints.groupId;
-            await subsAudioTrack.applyConstraints(audioTrackConstraints);
+            await extAudioTrack.applyConstraints(audioTrackConstraints);
+
+            let subsAudioTrack = extAudioTrack.clone();
             stream.addTrack(subsAudioTrack);
 
             logger(`Added audio track ${subsAudioTrack.label} to stream ${stream.id}`);
         }
 
         if (swapVideo) {
-            let subsVideoTrack = extStream.getVideoTracks()[0].clone();
+            // Learning: cloning a pc stream removes the ability to apply constraints to it
+            // ToDo: test this theory
+            let extVideoTrack = extStream.getVideoTracks()[0];
 
             let videoTrackConstraints = {...origConstraints.video};
             delete videoTrackConstraints.deviceId;
             delete videoTrackConstraints.groupId;
             delete videoTrackConstraints.facingMode;
-            await subsVideoTrack.applyConstraints(videoTrackConstraints);
+            await extVideoTrack.applyConstraints(videoTrackConstraints);
+
+            let subsVideoTrack = extVideoTrack.clone();
+
             stream.addTrack(subsVideoTrack);
             logger(`Added video track ${subsVideoTrack.label} to stream ${stream.id}`);
         }
@@ -198,7 +228,7 @@ async function shimGetUserMedia(constraints) {
     // Nothing to change - only if swapAudio & swapVideo are BOTH false (XOR)
     if (!swapAudio && swapAudio === swapVideo) {
         logger("webwebcam not selected for audio or video, so just passing this along to gUM");
-        return origGetUserMedia(constraints)
+        return origGetUserMedia(origConstraints)
     }
 
     // If there are only webwebcam sources to return
@@ -209,7 +239,7 @@ async function shimGetUserMedia(constraints) {
                 logger(`created a new stream with just webwebcam tracks: ${stream.id}`);
                 resolve(stream);
             } catch (err) {
-                logger(`Failed to create webwebcam stream: ${err}`);
+                logger(`Failed to create webwebcam stream:`, err);
                 reject(err);
             }
         })
@@ -238,7 +268,7 @@ const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.medi
 
 function shimGum() {
     if (shimActive) {
-        console.log("gUM shim already active; skipping");
+        logger("gUM shim already active; skipping");
         return
     }
 
@@ -277,8 +307,8 @@ function shimGum() {
 
 }
 
-//if (appEnabled)
-shimGum();
+if (appEnabled)
+    shimGum();
 
 // Finding: you can't send a stream over postMessage
 
@@ -398,15 +428,19 @@ function enumDevicesShim() {
             }
         );
 }
-
-navigator.mediaDevices.enumerateDevices = enumDevicesShim;
+if(appEnabled)
+    navigator.mediaDevices.enumerateDevices = enumDevicesShim;
 
 
 window.addEventListener('beforeunload', () => {
 //    window.removeEventListener('message', {passive: true});
 
-    if (peer)
+    // https://github.com/peers/peerjs/issues/636
+    if (peer){
+        extStream.getTracks().forEach(track=>track.stop());
+
         peer.destroy();
+    }
     logger('beforeunload handler')
 
 }, {passive: true});
@@ -439,10 +473,13 @@ document.addEventListener('webwebcam-content', e => {
         if (appEnabled && enabledState === "disabled") {
             logger("ending any connection and disabling shims");
 
-            if (connected) {
+            if (peer) {
                 peer.destroy();
-                appEnabled = false;
+                peer = false;
             }
+
+            appEnabled = false;
+
 
             if (standbyStream.enabled)
                 standbyStream.getTracks().forEach(track => track.stop());
@@ -465,7 +502,7 @@ document.addEventListener('webwebcam-content', e => {
         if (appEnabled === false && enabledState === "enabled") {
             logger("enabling shims");
             shimGum();
-            //navigator.mediaDevices.enumerateDevices = enumDevicesShim;
+            navigator.mediaDevices.enumerateDevices = enumDevicesShim;
 
         }
 

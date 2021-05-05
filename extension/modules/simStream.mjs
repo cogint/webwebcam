@@ -34,6 +34,11 @@ function videoFromImage(imageFile, width = 1920, height = 1080, frameRate = 10) 
         }, 1 / frameRate);
 
         let stream = canvas.captureStream(frameRate);
+
+        // This didn't work
+        // let videoTrack = stream.getVideoTracks()[0];
+        // videoTrack.label = "WebWebCam Standby";
+
         console.log("image stream", stream);
         return stream
     }
@@ -55,6 +60,7 @@ async function streamFromVideo(videoFile, width = 1920, height = 1080, frameRate
 
     // ToDo: I don't think this worked
     let videoTrack = stream.getVideoTracks()[0];
+    videoTrack.label = "WebWebCam Standby";
     await videoTrack.applyConstraints({width: width, height: height, frameRate: frameRate} );
 
     return stream;

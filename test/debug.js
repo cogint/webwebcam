@@ -6,6 +6,9 @@
 
 const videoSelect = document.querySelector('select#videoSource');
 const selectors = [videoSelect];
+const constraintInput = document.querySelector('textarea#videoConstraints');
+const selfSettings = document.querySelector('textarea#selfSettings');
+
 let selfStream;
 
 function gotDevices(deviceInfos) {
@@ -46,14 +49,18 @@ function getMedia(){
     if(selfStream)
         selfStream.getTracks().forEach(track=>track.stop);
     const videoSource = videoSelect.value;
-    const constraints = {
-        video:  {deviceId: videoSource ? {exact: videoSource} : undefined}
-    };
+
+    let constraints = {};
+    constraints.video = JSON.parse(constraintInput.value) || true;
+    constraints.video.deviceId = videoSource ? {exact: videoSource} : undefined;
+
+    console.log(`set constraints to ${JSON.stringify(constraints)}`);
 
     navigator.mediaDevices.getUserMedia(constraints)
         .then(stream=>{
             selfStream = stream;
-            document.querySelector('video#self').srcObject = stream
+            document.querySelector('video#self').srcObject = stream;
+            selfSettings.value = JSON.stringify(selfStream.getVideoTracks()[0].getSettings());
         })
         .catch(err=>console.error(err));
 }

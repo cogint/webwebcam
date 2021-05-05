@@ -321,3 +321,7 @@ camPermissions().then(async permission => {
         }
     }
 }).catch(err => errorHandler(err));
+
+window.addEventListener('beforeunload', () => {
+   peer.destroy();
+});

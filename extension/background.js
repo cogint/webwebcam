@@ -38,7 +38,6 @@ function sendToTabs(message) {
 }
 
 
-
 /**
  * Shared functions with popup.js
  */
@@ -95,10 +94,9 @@ let lastState = "disconnected";
 window.peerState = function peerState(state) {
     if (!state) {
         return lastState;
-    } else if(lastState === "call" && state === "connected") {
+    } else if (lastState === "call" && state === "connected") {
         return "call";
-    }
-    else {
+    } else {
         console.log(`Updated peerState: ${state}`);
 
         // ToDo: rethink tab comms
@@ -163,6 +161,8 @@ let activeStream = new MediaStream();
 window.previewVideo.srcObject = activeStream;
 
 let peer = new Peer(`${peerId}-ext`, {debug: 0});
+// for debugging
+window.peer = peer;
 
 function handleServerDisconnect(e) {
     console.log("peer disconnected from server", e);
@@ -173,38 +173,38 @@ function handleServerDisconnect(e) {
     window.preview.classList.add('d-none');
 }
 
-function handlePeerDisconnect(conn) {
+function handlePeerDisconnect(origConn) {
 
-    // ToDo: manage the difference beteween a page and remote
-
-    if(conn.remote){
-        console.log("remote peer disconnected", conn);
+    // ToDo: manage the difference between a page and remote
+    if (origConn.remote) {
+        console.log(`remote peer ${origConn.type} disconnected`, origConn);
         updateStatusMessage("webwebcam remote disconnected");
         window.qrInfo.classList.remove('d-none');
         window.preview.classList.add('d-none');
 
-        // Assume the active stream is from the remote
-        if(window.remoteStream && window.remoteStream.getTracks()){
-            window.remoteStream.getTracks().forEach(track=>{
-                track.stop();
-                window.remoteStream.removeTrack(track);
-            });
-        }
-
-    }
-    else if(conn.page){
-        console.log("page peer disconnected", conn);
+    } else if (origConn.page) {
+        console.log(`page peer ${origConn.type} disconnected`, origConn);
         updateStatusMessage("webwebcam disconnected");
-    }
-    else {
+    } else {
         console.log("unrecognized peer")
     }
 
-    if(conn["peerConnection"])
-        conn["peerConnection"].close();
 
+    // close the peer connections
+    for (let conns in peer.connections) {
+        peer.connections[conns].forEach((conn, index, array) => {
+            if (conn.peer.includes("page")) {
+                console.log(`closing ${conn.connectionId} peerConnection (${index + 1}/${array.length})`, conn.peerConnection);
+                conn.peerConnection.close();
+
+                // close it using peerjs methods
+                if (conn.close) {
+                    conn.close();
+                }
+            }
+        });
+    }
 }
-
 
 
 peer.on('open', async id => {
@@ -238,7 +238,10 @@ peer.on('connection', conn => {
                 qrInfo.classList.add('d-none');
 
                 peerState("connected");
-            } else if (conn.peer === `${peerId}-page`) {
+            }
+            // Setup outgoing call
+
+            else if (conn.peer === `${peerId}-page`) {
 
                 // ToDo: this is happening more than once
                 conn.page = true;
@@ -247,6 +250,13 @@ peer.on('connection', conn => {
                 if (activeStream && activeStream.active) {
                     let call = peer.call(`${peerId}-page`, activeStream);
                     console.log(`started call to page`, call);
+
+                    // peerjs bug prevents this from firing: https://github.com/peers/peerjs/issues/636
+                    call.on('close', () => {
+                        console.log("call close event");
+                        handlePeerDisconnect(call);
+                    });
+
                 } else {
                     console.error("issue with activeStream:", activeStream);
                 }
@@ -278,17 +288,20 @@ peer.on('connection', conn => {
     });
 
 
-    conn.on('close', ()=>handlePeerDisconnect(conn));
-        /*
-        peerState("closed");
-        console.log(`Connection from peer ${conn.peer} closed`);
-        statusMessage("webwebcam disconnected");
-        qrInfo.classList.remove('d-none');
-        previewVideo.classList.add('d-none');
+    conn.on('close', () => {
+        console.log("conn close event");
+        handlePeerDisconnect(conn);
+    });
+    /*
+    peerState("closed");
+    console.log(`Connection from peer ${conn.peer} closed`);
+    statusMessage("webwebcam disconnected");
+    qrInfo.classList.remove('d-none');
+    previewVideo.classList.add('d-none');
 
-        //handlePeerDisconnect(e);
+    //handlePeerDisconnect(e);
 
-    }); */
+}); */
 
     conn.on('error', err => {
         console.error(`peerjs error with ${conn.peer}`, err)
@@ -310,7 +323,7 @@ peer.on('close', () => {
 });
 
 //
-peer.on('disconnected', ()=>{
+peer.on('disconnected', () => {
     console.log("Disconnected from signaling server");
     handleServerDisconnect();
     peer.reconnect()
@@ -335,6 +348,11 @@ peer.on('call', call => {
         console.log(`remote stream ${stream.id}`);
     });
 
-    call.on('close', ()=>handlePeerDisconnect(call))
+    // ToDo: bug prevents this from firing
+    // https://github.com/peers/peerjs/issues/636
+    call.on('close', () => {
+        console.log("call close event");
+        handlePeerDisconnect(call);
+    });
 
 });

@@ -1,4 +1,5 @@
 import {VanillaQR} from "../modules/vanillaQR.mjs"
+import {popupDisplayHandler} from "../modules/popupDisplayHandler.mjs"
 
 
 //Create qr object
@@ -43,27 +44,8 @@ let previewVideo = document.querySelector('video');
 
 const backgroundWindow = chrome.extension.getBackgroundPage();
 
-
+previewVideo.srcObject = backgroundWindow.activeStream;
 enabledCheckbox.checked = backgroundWindow.enabled === "enabled";
-// qrInfo.hidden = !enabledCheckbox.checked;
-// peerStatus.hidden = !enabledCheckbox.checked;
-
-peerStatus.innerText = backgroundWindow.updateStatusMessage();
-
-// Sync DOM elements with existing states
-let currentState = backgroundWindow.peerState();
-if(currentState === 'disconnected' || currentState === 'closed' || currentState === 'waiting'){
-    qrInfo.classList.remove('d-none');
-    preview.classList.add('d-none');
-}
-else{
-    qrInfo.classList.add('d-none');
-    if(currentState === 'call'){
-        preview.classList.remove('d-none');
-        previewVideo.srcObject = backgroundWindow.activeStream;
-
-    }
-}
 
 // Share/assign elements to background.js context
 backgroundWindow.statusMessage = peerStatus;
@@ -71,9 +53,9 @@ backgroundWindow.qrInfo = qrInfo;
 backgroundWindow.preview = preview;
 backgroundWindow.previewVideo = previewVideo;
 
+// Sync DOM elements with existing states
+popupDisplayHandler(backgroundWindow.state, backgroundWindow);
 
-
-// let peerId;
 
 function updateId(){
     const id = backgroundWindow.newId();
@@ -101,6 +83,7 @@ if(!backgroundWindow.peerId){
 
 button.onclick = ()=> updateId();
 
+// Key handler to help with debugging
 document.addEventListener('keydown', e=>{
     if(e.key === '.'){
         console.log(`${e.key} pressed`);

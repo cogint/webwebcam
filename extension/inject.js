@@ -39,7 +39,7 @@ function logger(...message) {
      */
 
 
-let peer;
+let peer = false;
 let peerId;
 
 
@@ -132,11 +132,9 @@ async function connectPeer() {
 
 }
 
-
-if(appEnabled)
-    connectPeer().catch(err=>console.error(err));
-
-// ToDo: respond here - https://stackoverflow.com/questions/42462773/mock-navigator-mediadevices-enumeratedevices
+// uncomment to run this on every tab; currently causes issue since only one tab at a time supported
+// if(appEnabled)
+//    connectPeer().catch(err=>console.error(err));
 
 
 /*
@@ -266,6 +264,7 @@ async function shimGetUserMedia(constraints) {
 
 const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
+// Shim handler
 function shimGum() {
     if (shimActive) {
         logger("gUM shim already active; skipping");
@@ -277,6 +276,10 @@ function shimGum() {
         if (!appEnabled) {
             return origGetUserMedia(constraints)
         }
+
+        if(!peer)
+            connectPeer().catch(err=>console.error(err));
+
 
         logger("------------------------------------------");
         logger("navigator.mediaDevices.getUserMedia called");
@@ -323,7 +326,11 @@ function enumDevicesShim() {
     if (!appEnabled) {
         return origEnumerateDevices()
     } else
-        return origEnumerateDevices().then(async devices => {
+
+    if (!peer)
+        connectPeer().catch(err=>console.error(err));
+
+    return origEnumerateDevices().then(async devices => {
 
                 // Connect if not already connected
                 // await connectPeer();

@@ -9,51 +9,88 @@
     <script src="https://kit.fontawesome.com/fe6dfab9d6.js" crossorigin="anonymous"></script>
     <script src="https://cozmo.github.io/jsQR/jsQR.js"></script>
     <style>
+        body {
+            background-color: #0f0f0f;
+        }
         video {
             height: 100%;
             z-index: -1;
         }
-        .mirror{
+
+        span {
+            font-size: xx-large;
+            background-color: rgba(225, 225, 225, 0.5);
+            color: rgb(240, 255, 255);
+            padding: .2em .6em .3em;
+        }
+
+        .mirror {
             transform: scaleX(-1);
         }
-        .video-container{
-            /*position:relative;
-            display:inline-block;
-            height: 100%;
-            /*overflow: auto;*/
-        }
+
+
         .overlay {
-            position:absolute;
-            top:10%;
-            right:10%;
-            transform:translate(-50%,-50%);
+            position: absolute;
+            /*top: 10%;
+            right: calc(.20vh);*/
+            top: calc(48px + 40px);
+            right: 0%;
+            transform: translate(-50%, -50%);
+            padding: 0px;
+            margin: 40px;
+
         }
+
         button.btn {
-            color:#99ffff;
+            color: #99ffff;
         }
-        button#scan{
+
+        button#scan {
             color: azure;
         }
     </style>
 
 </head>
 <body>
-<div class="container-fluid cover-container text-center d-flex flex-column">
+<!--div class="container-fluid cover-container text-center d-flex flex-column">
     <div class="row col text-center">
         <span id="status"></span>
     </div>
-    <div id="scanPermission" class="row col d-none">
-        <!--span>Open the WebWebCam extension first</span-->
-        <button id="scan" class="btn btn-primary">Scan QR code</button>
+    <div id="scanPermission" class="row col">
+        <span>Click anywhere to accept camera permissions</span>
     </div>
     <div class="video-container flex-fill vh-100 row col">
         <video class="mirror" autoplay playsinline muted></video>
         <div class="overlay">
             <button id="changeCam" class="btn bg-transparent"><i class="fas fa-sync-alt fa-4x"></i></button>
         </div>
+    </div-->
+
+<div class="container-fluid cover-container text-center d-flex flex-column flex-fill row col vh-100">
+
+    <!-- Select camera permissions notification -->
+    <div class="position-absolute align-self-center p-5" id="clickForCam">
+        <span>Click anywhere to accept media permissions</span>
     </div>
 
-    <script type="module" src="remote.js"></script>
+    <!-- Video preview -->
+    <div class="video-container align-self-center vh-100">
+        <video class="mirror" autoplay playsinline muted></video>
+    </div>
+
+    <!-- Change camera button -->
+    <div class="overlay" >
+        <button id="changeCam" class="btn bg-transparent d-none"><i class="fas fa-sync-alt fa-6x"></i></button>
+    </div>
+
+    <!-- Status messages -->
+    <div class="position-absolute align-self-center fixed-bottom p-5">
+        <span id="status"></span>
+    </div>
+
+</div>
+
+<script type="module" src="remote.js"></script>
 </div>
 
 </body>

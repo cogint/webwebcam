@@ -260,8 +260,8 @@ async function scanQr() {
 }
 
 const urlParams = new URLSearchParams(window.location.search);
-if (urlParams.has("id")) {
-    peerId = urlParams.get("id");
+if (urlParams.has("id") || urlParams.has("i")) {
+    peerId = urlParams.get("id") || urlParams.get("i");
     console.log(`Using peerid ${peerId} from URL params`);
 }
 

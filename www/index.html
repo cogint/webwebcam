@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebWebCam</title>
+</head>
+<script>
+const homePage = "https://github.com/chadwallacehart/webwebcam";
+
+
+const thisUrl = new URL(window.location);
+const host = thisUrl.host;
+const pathnameNoFile = thisUrl.pathname.replace(/index\.html\/?/i, ""); //assume index.html
+const search = thisUrl.search;
+console.log(thisUrl);
+
+let remoteUrl =  "https://" + host + pathnameNoFile + "remote.html" + search;
+
+
+const urlParams = new URLSearchParams(thisUrl.search);
+if (urlParams.has("i")) {
+    peerId = urlParams.get("i");
+    console.log(`Using peerid ${peerId} from URL params`);
+    location.assign(remoteUrl);
+}
+else{
+    location.assign(homePage + search)
+}
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    const remoteA = document.querySelector('a');
+    remoteA.href = remoteUrl;
+    console.log('DOM fully loaded and parsed');
+});
+
+</script>
+<body>
+<p>If you see this then something went wrong.</p>
+<p>Click <a id="remoteHref" href="#">here</a> to connect your remote device/phone to the extension.</p>
+<p>For information on the project, please visit [ToDo: add overview page].</p>
+<p>Visit [add Chrome webstore url] to download and install the extension.</p>
+<p>If you are a developer interested in the project, then please visit [add github url].</p>
+</body>
+</html>

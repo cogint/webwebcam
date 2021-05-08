@@ -1,13 +1,13 @@
 // Content script
 
-// Note: JS context not shared with page - Doesn't work: window.plogger = (msg)=>console.log(`webwebcam content.js: ${msg}`);
+// Note: JS context not shared with page - Doesn't work: window.plogger = (msg)=>console.debug(`webwebcam content.js: ${msg}`);
 
 /*
  * Communicate with the injected content
  */
 
 const sendToInject = message => {
-    console.log("webwebcam content: sending this to inject.js", message);
+    console.debug("webwebcam content: sending this to inject.js", message);
     document.dispatchEvent(new CustomEvent('webwebcam-content', {detail: message}));
 };
 
@@ -16,7 +16,7 @@ document.addEventListener('webwebcam-inject', async e => {
         return;
 
     let data = e.detail;
-    console.log("webwebcam content: inject event data:", JSON.stringify(data));
+    console.debug("webwebcam content: inject event data:", JSON.stringify(data));
 
     // ToDo: add handlers for connected, disconnected
     if (data.message) {
@@ -31,7 +31,7 @@ document.addEventListener('webwebcam-inject', async e => {
  */
 
 function backgroundMessageHandler(message) {
-    console.log("webwebcam content: background.js message", message);
+    console.debug("webwebcam content: background.js message", message);
     if (!message) {
         console.info("webwebcam content: missing message from background.js", message);
         return
@@ -60,7 +60,7 @@ function backgroundMessageHandler(message) {
         // if the document isn't ready, wait for it
         else {
             document.addEventListener('DOMContentLoaded', () => {
-                // console.log("DOMContentLoaded");
+                // console.debug("DOMContentLoaded");
                 sendToInject(injectMessage);
             });
         }
@@ -78,7 +78,7 @@ function sendToBackground(message) {
 // Listen for updates from background.js
 chrome.runtime.onMessage.addListener(
     (request, sender) => {
-        console.log("webwebcam content: message from background.js", request, sender);
+        console.debug("webwebcam content: message from background.js", request, sender);
         backgroundMessageHandler(request)
     }
 );
@@ -90,7 +90,7 @@ let peerId, enabled;
 chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result => {
     peerId = result.webwebcamPeerId || null;
     enabled = result.webwebcamEnabled || false;
-    console.log(`peerId: ${peerId}, enabled: ${enabled}`);
+    console.debug(`webwebcam content: peerId: ${peerId}, enabled: ${enabled}`);
 
     // https://stackoverflow.com/questions/9515704/use-a-content-script-to-access-the-page-context-variables-and-functions
     let script = document.createElement('script');
@@ -114,7 +114,7 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
                 scriptText = scriptText.replace("let appEnabled = true",
                     `let appEnabled = ${enabled === "enabled"}`);
 
-            // console.log(scriptText);
+            // console.debug(scriptText);
             script.textContent = scriptText;
 
             script.onload = () => this.remove;
@@ -131,4 +131,4 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
 
 sendToBackground("hello");
 
-console.log("webwebcam content: content.js loaded");
+console.debug("webwebcam content: content.js loaded");

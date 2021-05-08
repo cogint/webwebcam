@@ -1,0 +1,20 @@
+{
+  "hosting": {
+    "public": "www",
+    "rewrites": [
+      {
+        "source": "/remote",
+        "destination": "/remote.html"
+      },
+      {
+        "source": "/r",
+        "destination": "/remote.html"
+      }
+    ],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}

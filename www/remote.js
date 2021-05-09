@@ -1,17 +1,18 @@
-import {mungeH264} from "./extension/modules/mungeH264.mjs";
+import {mungeH264} from "./modules/mungeH264.mjs";
 
 let video = document.querySelector('video');
 let changeCam = document.getElementById('changeCam');
 let status = document.getElementById('status');
+let statusDiv = document.getElementById('statusDiv');
 let clickForCam =  document.getElementById('clickForCam');
 
 const CALL_RETRY_PERIOD = 2 * 1000;
 let deviceIds = [];
-let index = 1;
+let index = 0;
 let currentDeviceId = "";
 let disablePeer = false;
 
-let peer, extCall, pageCall; // Global holders for calls
+let peer, extCall; // Global holders for calls
 let peerId = false;
 let stream = null; // make this global for debugging
 
@@ -22,23 +23,35 @@ function errorHandler(error) {
     // connExt.send(`${e.name}: ${e.message}`);
 }
 
+function updateDevices(devices){
+    // ToDo: handle audio
+    deviceIds = [];
+    devices.forEach(device => {
+        if (device.kind === "videoinput") {
+            // console.log(device);
+            deviceIds.push(device.deviceId);
+        }
+    });
+    window.deviceIds = deviceIds;
+    console.log("new device ids", deviceIds)
+}
+
 // getUserMedia wrapper that checks for facing mode or device in case of mobile
 async function getNextVideoDevice() {
 
-    console.log("device scan");
-    try {
-        let devices = await navigator.mediaDevices.enumerateDevices();
-        devices.forEach(async device => {
-            if (device.kind === "videoinput") {
-                // console.log(device);
-                deviceIds.push(device.deviceId);
-            }
-        });
-    } catch (e) {
-        errorHandler(e)
-    }
-
-
+    /*
+        console.log("device scan");
+        navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+            devices.forEach(async device => {
+                if (device.kind === "videoinput") {
+                    // console.log(device);
+                    deviceIds.push(device.deviceId);
+                }
+            });
+        })
+        .catch(console.error);
+     */
 
     let constraints = {
         video: {
@@ -50,7 +63,7 @@ async function getNextVideoDevice() {
 
     index++;
 
-    if (index > deviceIds.length)
+    if (index >= deviceIds.length)
         index = 0;
 
     // If the next id happens to be the current selection, go to the next one
@@ -63,14 +76,14 @@ async function getNextVideoDevice() {
     try {
         console.log(JSON.stringify(constraints));
 
-        let stream = await navigator.mediaDevices.getUserMedia(constraints);
-        window.stream = stream; // for debugging
-
+        let gumStream = await navigator.mediaDevices.getUserMedia(constraints);
+        // window.stream = stream; // for debugging
 
         let currentDeviceSettings = stream.getVideoTracks()[0].getSettings();
         currentDeviceId = currentDeviceSettings.deviceId;
 
-        return stream;
+        navigator.mediaDevices.enumerateDevices().then(updateDevices);
+        return gumStream;
     } catch (e) {
         errorHandler(e)
     }
@@ -79,6 +92,10 @@ async function getNextVideoDevice() {
 
 changeCam.onclick = async () => {
 
+    // ToDo: sometimes the same camera comes back twice
+
+    status.innerText = "switching camera";
+    stopQrScan = true;
 
     // ToDo: catch errors
     let newStream = await getNextVideoDevice().catch(err => {
@@ -87,25 +104,24 @@ changeCam.onclick = async () => {
 
     if (newStream.id === stream.id) {
         console.log("the same stream was returned, trying again");
-        newStream = await getMedia().catch(err => console.error(err));
+        newStream = await await getNextVideoDevice().catch(err => console.error(err));
         //ToDo: check deviceIds for the same?
     }
 
-    stopQrScan = true;
 
-    stream.getTracks().forEach(track => track.stop());
     // newStream.getTracks().forEach(track=>stream.addTrack(track));
     video.srcObject = newStream;
 
+    console.log("extCall status", extCall);
     if (extCall && extCall.open) {
-        let videoSender = await pageCall.peerConnection.getSenders().find(s => {
+        let videoSender = await extCall.peerConnection.getSenders().find(s => {
             return s.track.kind === "video";
         });
         console.log("videoSender", videoSender);
         let newVideoTrack = newStream.getVideoTracks()[0];
         await videoSender.replaceTrack(newVideoTrack);
 
-        let audioSender = await pageCall.peerConnection.getSenders().find(s => {
+        let audioSender = await extCall.peerConnection.getSenders().find(s => {
             return s.track.kind === "audio";
         });
         console.log("audioSender", audioSender);
@@ -113,11 +129,21 @@ changeCam.onclick = async () => {
         await audioSender.replaceTrack(newAudioTrack);
 
         console.log("replaced preview stream track to peer");
-    } else {
-        video.onloadeddata = async () => await scanQr();
+        status.innerText = "connected to webwebcam extension";
+
+    } else if (!peerId){
+        video.onloadeddata = async () => {
+            video.onloadeddata = null;
+            await scanQr();
+        }
+    }
+    else{
+        console.error("Invalid state after changecam");
     }
 
+    stream.getTracks().forEach(track => track.stop());
     stream = newStream;
+    window.stream = stream;
     newStream = null;
 
 };
@@ -171,13 +197,21 @@ function extPeer(peerId) {
         // Video should there
         if (stream && stream.active) {
             // ToD:  bug is preventing H.264 from working:
-            let call = peer.call(`${peerId}-ext`, stream); //, {sdpTransform: mungeH264});
+            extCall = peer.call(`${peerId}-ext`, stream); //, {sdpTransform: mungeH264});
             console.log("initiated preview stream call");
+            status.innerText = "connected to webwebcam extension";
 
-            call.on('close', () => {
-                console.log("mediaConnection ended")
-            })
+            extCall.on('error', err => {
+                console.error(err);
+                status.innerText = "Call error";
+            });
+
+            extCall.on('close', () => {
+                console.log("mediaConnection ended");
+                status.innerText = "Extension disconnected.";
+            });
         }
+        else console.log("Local stream issue; skipping call", stream);
     });
 
     // User notice to install / check the extension
@@ -210,9 +244,9 @@ async function camPermissions() {
 
     return new Promise(async (resolve, reject) => {
         navigator.permissions.query({name: "camera"})
-            .then(status => {
-                console.log("gUM permission status", status.state);
-                resolve(status.state === "granted");
+            .then(permission => {
+                console.log("gUM permission status", permission.state);
+                resolve(permission.state === "granted");
             })
             .catch(err => reject(err))
     });
@@ -220,12 +254,16 @@ async function camPermissions() {
 
 let stopQrScan = false;
 async function scanQr() {
+
     let canvas = document.createElement('canvas');
     //let canvas  = document.querySelector('canvas');
     let ctx = canvas.getContext("2d");
+
     console.log("looking for QR code");
+    status.innerText = "looking for QR code";
 
     stopQrScan = false;
+
     function checkQr() {
         if(stopQrScan) {
             console.log("stopped QR scan");
@@ -249,6 +287,7 @@ async function scanQr() {
                 } else {
                     // This was giving violation errors
                     console.log("bad QR code");
+                    status.innerText = "invalid QR code";
                     requestAnimationFrame(checkQr);
                 }
             }
@@ -279,26 +318,40 @@ async function startMedia(){
     changeCam.classList.remove("d-none");
 
     if(peerId){
-        video.onloadeddata = () => extPeer(peerId);
+        video.onloadeddata = () => {
+            video.onloadeddata = null;
+            extPeer(peerId);
+        };
         status.innerText = "connecting to webwebcam extension";
     }
     else{
-        video.onloadeddata = () => scanQr();
-        status.innerText = "looking for QR code";
+        video.onloadeddata = async () => {
+            video.onloadeddata = null;
+            await scanQr()
+        };
     }
+
+    // Populate the device list
+    navigator.mediaDevices.enumerateDevices().then(updateDevices);
+
 
 }
 
 camPermissions().then(async permission => {
     if (permission) {
         clickForCam.classList.add("d-none");
+        statusDiv.classList.remove("d-none");
         await startMedia();
 
     } else {
-        status.innerText = "some temporary text"; // ToDo: remove
+        //status.innerText = ""; // ToDo: remove
         console.log("Camera permissions denied; waiting for user");
         // permissions.classList.remove('d-none');
         document.onclick = async () => {
+            clickForCam.classList.add("d-none");
+            statusDiv.classList.remove("d-none");
+            status.innerText = "accept camera and microphone permissions in the popup prompt";
+            document.onclick = null;
             await startMedia();
         };
     }

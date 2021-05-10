@@ -123,7 +123,7 @@ async function connectPeer() {
 
         });
 
-        logger("Answering incoming call", call.id);
+        logger("Answering incoming call", call);
         call.answer();
 
         call.on('close', handlePeerDisconnect);

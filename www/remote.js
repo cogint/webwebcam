@@ -114,6 +114,8 @@ changeCam.onclick = async () => {
 
     console.log("extCall status", extCall);
     if (extCall && extCall.open) {
+
+        // replace the video track
         let videoSender = await extCall.peerConnection.getSenders().find(s => {
             return s.track.kind === "video";
         });
@@ -121,6 +123,7 @@ changeCam.onclick = async () => {
         let newVideoTrack = newStream.getVideoTracks()[0];
         await videoSender.replaceTrack(newVideoTrack);
 
+        // replace the audio track
         let audioSender = await extCall.peerConnection.getSenders().find(s => {
             return s.track.kind === "audio";
         });

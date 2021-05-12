@@ -122,7 +122,7 @@ async function connectPeer() {
 
         });
 
-        logger("Answering incoming call", call);
+        logger("Answering incoming call", call.id);
         call.answer();
 
         call.on('close', handlePeerDisconnect);

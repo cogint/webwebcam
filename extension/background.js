@@ -125,7 +125,6 @@ if (enabled !== null) {
 
 window.activeStream = new MediaStream();
 window.previewVideo.srcObject = activeStream;
-let remoteCall, pageCall; // holders for call objects
 
 let peer = new Peer(`${peerId}-ext`, {debug: 0});
 // for debugging
@@ -137,7 +136,7 @@ function handleServerDisconnect(e) {
     peer.reconnect();
 }
 
-async function handlePeerDisconnect(origConn) {
+function handlePeerDisconnect(origConn) {
 
     function manualClose(type){
         // close the peer connections
@@ -164,33 +163,11 @@ async function handlePeerDisconnect(origConn) {
         manualClose("remote");
         peerState("closed");
         window.previewVideo.srcObject = standbyStream;
-
-        // ToDo: make a function / module for this
-        // swap in the standby stream if the pageCall is already connected
-        if(pageCall.open){
-
-            // replace the video track
-            let videoSender = await pageCall.peerConnection.getSenders().find(s => {
-                return s.track.kind === "video";
-            });
-            console.log("videoSender", videoSender);
-            let newVideoTrack = standbyStream.getVideoTracks()[0];
-            await videoSender.replaceTrack(newVideoTrack);
-
-            // replace the audio track
-            let audioSender = await pageCall.peerConnection.getSenders().find(s => {
-                return s.track.kind === "audio";
-            });
-            console.log("audioSender", audioSender);
-            let newAudioTrack = standbyStream.getAudioTracks()[0];
-            await audioSender.replaceTrack(newAudioTrack);
-        }
-
     } else if (origConn.page) {
         console.log(`page peer ${origConn.type} disconnected`, origConn);
         manualClose("page");
     } else {
-        console.log("unrecognized peer", origConn)
+        console.log("unrecognized peer")
     }
 }
 
@@ -230,23 +207,19 @@ peer.on('connection', conn => {
                 conn.page = true;
 
                 // this should always pass
-                if (!window.activeStream.active) {
-                    console.log("Active stream stopped. Switching to standby stream");
-                    window.activeStream = window.standbyStream;
+                if (window.activeStream.active) {
+                    let call = peer.call(`${peerId}-page`, window.activeStream);
+                    console.log(`started call to page`, call);
+
+                    // peerjs bug prevents this from firing: https://github.com/peers/peerjs/issues/636
+                    call.on('close', () => {
+                        console.log("call close event");
+                        handlePeerDisconnect(call);
+                    });
+
+                } else {
+                    console.error("issue with activeStream:", window.activeStream);
                 }
-
-                pageCall = peer.call(`${peerId}-page`, window.activeStream);
-                console.log(`started call to page`, pageCall);
-
-                // peerjs bug prevents this from firing: https://github.com/peers/peerjs/issues/636
-                pageCall.on('close', () => {
-                    console.log("call close event");
-                    handlePeerDisconnect(pageCall);
-                });
-
-                /*} else {
-                    console.error("Page call - issue with activeStream:", window.activeStream);
-                }*/
             } else {
                 console.log("unrecognized peer: ", conn.peer);
             }
@@ -299,9 +272,8 @@ peer.on('disconnected', () => {
 // Handle incoming call from remote
 peer.on('call', call => {
     console.log("incoming call", call);
-    remoteCall = call;
 
-    remoteCall.on('stream', async stream => {
+    call.on('stream', stream => {
 
         if (window.activeStream.id === stream.id) {
             console.log("duplicate stream. (bad peerjs)", stream.id);
@@ -313,26 +285,6 @@ peer.on('call', call => {
         // Assume call is from remote.js for now
         window.activeStream = stream;
         window.remoteStream = stream; // for Debugging
-
-        // swap out the standby stream if the pageCall is already connected
-        if(pageCall && pageCall.open){
-
-            // replace the video track
-            let videoSender = await pageCall.peerConnection.getSenders().find(s => {
-                return s.track.kind === "video";
-            });
-            console.log("videoSender", videoSender);
-            let newVideoTrack = stream.getVideoTracks()[0];
-            await videoSender.replaceTrack(newVideoTrack);
-
-            // replace the audio track
-            let audioSender = await pageCall.peerConnection.getSenders().find(s => {
-                return s.track.kind === "audio";
-            });
-            console.log("audioSender", audioSender);
-            let newAudioTrack = stream.getAudioTracks()[0];
-            await audioSender.replaceTrack(newAudioTrack);
-        }
 
         peerState("call");
 

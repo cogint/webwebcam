@@ -26,11 +26,11 @@ function logger(...message) {
 
     const len = message.length;
     if (len === 1)
-        console.log('webwebcam inject: ', message[0]);
+        console.debug('webwebcam inject: ', message[0]);
     else if (len === 2)
-        console.log('webwebcam inject: ', message[0], message[1]);
+        console.debug('webwebcam inject: ', message[0], message[1]);
     else
-        console.log('webwebcam inject: ', JSON.stringify(message.flat()));
+        console.debug('webwebcam inject: ', JSON.stringify(message.flat()));
 }
 
 
@@ -54,11 +54,11 @@ async function connectPeer() {
 
         let parcelRequire = null;
 
-        // ToDo: pass / load the extension ID so it is updated below
+        // ToDo: pass / load the extension ID so it is updated below or inject this as a module
         await fetch('chrome-extension://cemghnpnocjajchopfooodogjcdabglm/peerjs.min.js')
             .then(resp => resp.text())
             .then(js => eval(js))
-            .catch(console.error);
+            .catch(err=>console.error("webwebcam: ", error));
     }
 
     if (peer) {
@@ -92,7 +92,6 @@ async function connectPeer() {
         logger("connection:", conn);
 
     });
-
 
     async function handlePeerDisconnect(e) {
         streamReady = false;
@@ -129,6 +128,9 @@ async function connectPeer() {
         call.on('close', handlePeerDisconnect);
 
     });
+
+    peer.on('error', error=>console.error("webwebcam:" , error));
+
 
 }
 
@@ -258,7 +260,7 @@ async function shimGetUserMedia(constraints) {
         })
     } else {
         logger("invalid getUserMediaShim state");
-        console.error("invalid getUserMediaShim state")
+        console.error("webwebcam: invalid getUserMediaShim state")
     }
 }
 
@@ -278,7 +280,7 @@ function shimGum() {
         }
 
         if(!peer)
-            connectPeer().catch(err=>console.error(err));
+            connectPeer().catch(err=>console.error("webwebcam error:",  err));
 
 
         logger("------------------------------------------");
@@ -328,7 +330,7 @@ function enumDevicesShim() {
     } else
 
     if (!peer)
-        connectPeer().catch(err=>console.error(err));
+        connectPeer().catch(err=>console.error("webwebcam: ", err));
 
     return origEnumerateDevices().then(async devices => {
 

@@ -4,9 +4,15 @@ let video = document.querySelector('video');
 let changeCam = document.getElementById('changeCam');
 let status = document.getElementById('status');
 let statusDiv = document.getElementById('statusDiv');
-let clickForCam =  document.getElementById('clickForCam');
+let clickForCam = document.getElementById('clickForCam');
 
 const CALL_RETRY_PERIOD = 2 * 1000;
+
+//ToDo: uses these in the regex match
+const PEER_ID_LENGHT_MIN = 8;
+const PEER_ID_LENGHT_MAX = 20;
+
+
 let deviceIds = [];
 let index = 0;
 let currentDeviceId = "";
@@ -23,7 +29,7 @@ function errorHandler(error) {
     // connExt.send(`${e.name}: ${e.message}`);
 }
 
-function updateDevices(devices){
+function updateDevices(devices) {
     // ToDo: handle audio
     deviceIds = [];
     devices.forEach(device => {
@@ -134,13 +140,12 @@ changeCam.onclick = async () => {
         console.log("replaced preview stream track to peer");
         status.innerText = "connected to webwebcam extension";
 
-    } else if (!peerId){
+    } else if (!peerId) {
         video.onloadeddata = async () => {
             video.onloadeddata = null;
             await scanQr();
         }
-    }
-    else{
+    } else {
         console.error("Invalid state after changecam");
     }
 
@@ -213,8 +218,7 @@ function extPeer(peerId) {
                 console.log("mediaConnection ended");
                 status.innerText = "Extension disconnected.";
             });
-        }
-        else console.log("Local stream issue; skipping call", stream);
+        } else console.log("Local stream issue; skipping call", stream);
     });
 
     // User notice to install / check the extension
@@ -256,6 +260,7 @@ async function camPermissions() {
 }
 
 let stopQrScan = false;
+
 async function scanQr() {
 
     let canvas = document.createElement('canvas');
@@ -268,7 +273,7 @@ async function scanQr() {
     stopQrScan = false;
 
     function checkQr() {
-        if(stopQrScan) {
+        if (stopQrScan) {
             console.log("stopped QR scan");
             return;
         }
@@ -280,8 +285,21 @@ async function scanQr() {
         let code = jsQR(imageData.data, imageData.width, imageData.height, {});
 
         if (code) {
-            console.log(code.data);
-            if (code.data.toLowerCase().includes("webwebcam")) {
+            console.log(`scanned data: ${code.data}`);
+            // check for a url, then check for webweb.cam, then a valid ID
+            const codeSearch = code.data.match(/(?:http?s:\/\/webweb.cam(?:\/|\?i=))([0-9a-zA-Z]{8,20})/i);
+            console.log(`codesearch: ${codeSearch}`);
+
+            const peerId = codeSearch ? codeSearch[1] : null;
+
+            console.log(peerId);
+            if (peerId) {
+                console.log(`scanned ID: ${peerId}`);
+                extPeer(peerId);
+                stopQrScan = true;
+            }
+            //old method looks for JSON
+            else if (code.data.toLowerCase().includes("webwebcam")) {
                 let peerId = JSON.parse(code.data).webwebcam;
                 if (peerId) {
                     console.log(`scanned ID: ${peerId}`);
@@ -294,8 +312,9 @@ async function scanQr() {
                     requestAnimationFrame(checkQr);
                 }
             }
-        } else{}
+        } else {
             requestAnimationFrame(checkQr);
+        }
     }
 
     checkQr();
@@ -311,23 +330,21 @@ if (urlParams.has("id") || urlParams.has("i")) {
 //window.addEventListener('DOMContentLoaded', ()=>{});
 
 
-
-async function startMedia(){
-    let startingConstraints = {video: {width: {ideal: 1920}, height: {ideal: 1080}}, audio: true };
+async function startMedia() {
+    let startingConstraints = {video: {width: {ideal: 1920}, height: {ideal: 1080}}, audio: true};
 
     stream = await navigator.mediaDevices.getUserMedia(startingConstraints);
     video.srcObject = stream;
 
     changeCam.classList.remove("d-none");
 
-    if(peerId){
+    if (peerId) {
         video.onloadeddata = () => {
             video.onloadeddata = null;
             extPeer(peerId);
         };
         status.innerText = "connecting to webwebcam extension";
-    }
-    else{
+    } else {
         video.onloadeddata = async () => {
             video.onloadeddata = null;
             await scanQr()

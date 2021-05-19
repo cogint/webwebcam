@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <title>WebWebCam settings</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="scripts/jquery-3.2.1.slim.min.js"></script>
+    <script src="scripts/popper.min.js"></script>
+    <script src="scripts/bootstrap.min.js"></script>
+    <script src="scripts/font-awesome.js"></script>
     <style>
         /* The switch - the box around the slider */
         .switch {
@@ -58,9 +62,11 @@
             -ms-transform: translateX(26px);
             transform: translateX(26px);
         }
+
         .container {
-            width: 360px;
+            width:  360px;
         }
+
         video {
             width: 260px;
         }
@@ -86,7 +92,18 @@
             <h4 class="card-header">QR Code</h4>
             <div class="card-body">
                 <div id="qr"></div>
-                <span id="peerIdText"></span>
+                <h6>Remote Link
+                    <a id="copyLink" class="js-copy fas fa-copy" data-toggle="tooltip" data-placement="top"
+                       data-animation="true"
+                       title="Copy link to remote URL">
+                        <!--data-toggle="popover" data-placement="top" data-animation="true" data-content="Link copied to clipboard." -->
+                        <!--i class="fas fa-copy"></i-->
+                    </a>
+                    <br>
+
+                    <span class="small" id="peerIdText"></span>
+                </h6>
+
                 <button id="newQr">Regenerate</button>
             </div>
         </div>

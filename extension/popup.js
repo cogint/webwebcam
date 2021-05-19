@@ -1,7 +1,13 @@
 import {VanillaQR} from "../modules/vanillaQR.mjs"
 import {popupDisplayHandler} from "../modules/popupDisplayHandler.mjs"
 
+// ToDo: build variables
+const ROOT_URL = "https://webweb.cam?i=";
 
+
+/**
+ * QR Code
+ */
 //Create qr object
 //Minus the url, these are the defaults
 let qr = new VanillaQR({
@@ -34,8 +40,10 @@ document.getElementById('qr').appendChild(qr.domElement);
  * Main logic
  */
 
+// ToDo: redo in jquery
 let button = document.getElementById('newQr');
 let idText = document.getElementById('peerIdText');
+
 let enabledCheckbox = document.getElementById('enabledCheckbox');
 let qrInfo = document.getElementById('qrInfo');
 let peerStatus = document.getElementById('peerStatus');
@@ -57,10 +65,11 @@ backgroundWindow.previewVideo = previewVideo;
 popupDisplayHandler(backgroundWindow.state, backgroundWindow);
 
 
-function updateId(){
-    const id = backgroundWindow.newId();
-    idText.innerText = id;
-    qr.url = JSON.stringify({webwebcam: id});
+function updateId(generate = true){
+    const id = generate ?  backgroundWindow.newId() : backgroundWindow.peerId;
+    const fullUrl = ROOT_URL + id;
+    idText.innerText = fullUrl;
+    qr.url = fullUrl;  // qr.url = JSON.stringify({webwebcam: id});
     qr.init();
 }
 
@@ -74,14 +83,25 @@ enabledCheckbox.onchange= (e)=>{
 
 if(!backgroundWindow.peerId){
     console.info("No peerId found on backgroundWindow.peerId");
-    updateId();
+    updateId(true);
 } else {
+    updateId(false);
+    /*
     idText.innerText = backgroundWindow.peerId;
-    qr.url = JSON.stringify({webwebcam: backgroundWindow.peerId});
+    // qr.url = JSON.stringify({webwebcam: backgroundWindow.peerId});
     qr.init();
+     */
 }
 
 button.onclick = ()=> updateId();
+
+/*
+copyLink.onclick = async () => {
+    await navigator.clipboard.writeText(ROOT_URL + backgroundWindow.peerId);
+    console.log(ROOT_URL + backgroundWindow.peerId);
+};
+*/
+
 
 // Key handler to help with debugging
 document.addEventListener('keydown', e=>{
@@ -101,4 +121,31 @@ document.addEventListener('keydown', e=>{
 
     }
 
+});
+
+
+/**
+ * Bootstrap
+ */
+$(function () {
+    //$('[data-toggle="popover"]').popover();
+});
+
+$('[data-toggle="tooltip"]').tooltip();
+
+
+$('.js-copy').click(async(e)=> {
+    console.log(e.target);
+    let copyLink = $('#copyLink'); //$(this); // Not sure why # $(this) didn't work
+    // let copyLink = e.target;
+    await navigator.clipboard.writeText(ROOT_URL + backgroundWindow.peerId);
+    let elOriginalText = copyLink.attr('data-original-title');
+    copyLink.attr('data-original-title', "Copied!").tooltip('show');
+    console.log(ROOT_URL + backgroundWindow.peerId);
+    copyLink.attr('data-original-title', elOriginalText);
+
+    // Attempts to set hide delay via toggle options didn't work
+    setTimeout(()=>{
+        copyLink.tooltip('hide');
+    }, 2000)
 });

@@ -56,7 +56,7 @@ window.previewVideo = document.createElement('video');
 
 // Make this global for the pop-up
 window.newId = function newId() {
-    peerId = generateId(20);
+    peerId = generateId(14); // originally was 20
     localStorage.setItem("peerId", peerId);
     chrome.storage.local.set({'webwebcamPeerId': peerId}, () => {
     });

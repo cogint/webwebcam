@@ -3,7 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <title>Simple Peer sender</title>
+    <script src="https://observertc.github.io/observer-js/dist/v2105-08/observer.js"></script>
     <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <script>
+        let observerWsEndPoint = ObserverRTC.ParserUtil.parseWsServerUrl(
+            "wss://webrtc-observer.org/",           // observerURL
+            "390ddd1f-1d03-4f79-adc8-a174568e97ba", // Add a unique ServiceUUID here
+            "webwebcam",                            // MediaUnitID
+            "v20200114"                             // StatsVersion
+        );
+    </script>
+    <script src="https://observertc.github.io/integrations/dist/v2105-08/peerjs.integration.js"></script>
 
 </head>
 <body>

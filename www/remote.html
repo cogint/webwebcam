@@ -14,11 +14,14 @@
         }
         video {
             height: 100%;
+            width: 100%;
             z-index: -1;
+            object-fit: cover;
         }
 
         span {
-            font-size: xx-large;
+            /*font-size: xx-large;*/
+            font-size: calc(100% + 1vw + 1vh);
             background-color: rgba(225, 225, 225, 0.5);
             color: rgb(240, 255, 255);
             padding: .2em .6em .3em;
@@ -29,20 +32,9 @@
         }
 
 
-        .overlay {
-            position: absolute;
-            /*top: 10%;
-            right: calc(.20vh);*/
-            top: calc(48px + 40px);
-            right: 0%;
-            transform: translate(-50%, -50%);
-            padding: 0px;
-            margin: 40px;
-
-        }
-
         button.btn {
             color: #99ffff;
+
         }
 
         button#scan {
@@ -52,40 +44,28 @@
 
 </head>
 <body>
-<!--div class="container-fluid cover-container text-center d-flex flex-column">
-    <div class="row col text-center">
-        <span id="status"></span>
-    </div>
-    <div id="scanPermission" class="row col">
-        <span>Click anywhere to accept camera permissions</span>
-    </div>
-    <div class="video-container flex-fill vh-100 row col">
-        <video class="mirror" autoplay playsinline muted></video>
-        <div class="overlay">
-            <button id="changeCam" class="btn bg-transparent"><i class="fas fa-sync-alt fa-4x"></i></button>
-        </div>
-    </div-->
 
 <div class="container-fluid cover-container text-center d-flex flex-column flex-fill row col vh-100">
 
-    <!-- Select camera permissions notification -->
-    <div class="position-absolute align-self-center p-5" id="clickForCam">
-        <span>Click anywhere to accept media permissions</span>
+    <!-- Status messages -->
+    <div id="statusDiv" class="position-absolute align-self-center p-4">
+        <span id="status">Click anywhere to accept media permission</span>
     </div>
 
     <!-- Video preview -->
-    <div class="video-container align-self-center vh-100">
-        <video class="mirror" autoplay playsinline muted></video>
+    <div class="video-container align-self-center vh-100 vw-100">
+        <video autoplay playsinline muted></video>
     </div>
+
 
     <!-- Change camera button -->
-    <div class="overlay" >
-        <button id="changeCam" class="btn bg-transparent d-none"><i class="fas fa-sync-alt fa-6x"></i></button>
-    </div>
+    <div id="controlsBar" class="position-absolute align-self-center fixed-bottom p-5 d-none">
+        <div class="btn-group btn-group-lg" role="group" aria-label="Audio and video controls">
+            <button id="changeCam" class="btn btn-block mr-2"><i class="fas fa-video fa-lg"></i></button>
+            <button id="flipCam" class="btn btn-block ml-2 mr-2"><i class="fas fa-portrait fa-lg"></i></button>
+            <button id="changeMic" class="btn btn-block ml-2"><i class="fas fa-microphone fa-lg"></i></button>
 
-    <!-- Status messages -->
-    <div id="statusDiv" class="position-absolute align-self-center fixed-bottom p-5 d-none">
-        <span id="status"></span>
+        </div>
     </div>
 
 </div>

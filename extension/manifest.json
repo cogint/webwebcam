@@ -21,5 +21,6 @@
   "permissions": [
     "http://*/", "https://*/", "storage"
   ],
-  "web_accessible_resources": ["inject.js", "peerjs.min.js"]
+  "web_accessible_resources": ["inject.js", "peerjs.min.js"],
+  "content_security_policy": "script-src 'self' https://observertc.github.io https://www.gstatic.com https://www.googletagmanager.com; object-src 'self'"
 }

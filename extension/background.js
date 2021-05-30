@@ -56,7 +56,7 @@ window.previewVideo = document.createElement('video');
 
 // Make this global for the pop-up
 window.newId = function newId() {
-    peerId = generateId(20);
+    peerId = generateId(14); // originally was 20
     localStorage.setItem("peerId", peerId);
     chrome.storage.local.set({'webwebcamPeerId': peerId}, () => {
     });
@@ -167,7 +167,7 @@ async function handlePeerDisconnect(origConn) {
 
         // ToDo: make a function / module for this
         // swap in the standby stream if the pageCall is already connected
-        if(pageCall.open){
+        if(pageCall && pageCall.open){
 
             // replace the video track
             let videoSender = await pageCall.peerConnection.getSenders().find(s => {

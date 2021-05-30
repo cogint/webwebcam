@@ -142,6 +142,7 @@ async function getNextDevice(video=false, audio=false) {
 
 }
 
+// Swap peer.js peerConnection tracks with the newStream
 async function switchStream(newStream){
     if (extCall && extCall.open) {
         console.log("extCall status", extCall);
@@ -203,6 +204,7 @@ changeMic.onclick = async  ()=>{
 
 };
 
+// Cam change button handler
 changeCam.onclick = async () => {
 
     // ToDo: sometimes the same camera comes back twice
@@ -233,6 +235,7 @@ changeCam.onclick = async () => {
 
 };
 
+// Cam mirror button handler
 flipCam.onclick = () => {
     video.classList.toggle("mirror");
     console.log("changed video mirroring");

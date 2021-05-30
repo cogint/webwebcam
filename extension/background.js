@@ -18,7 +18,6 @@ chrome.runtime.onMessage.addListener(
             return
         }
 
-
         if (request.webwebcam === "hello") {
             sendResponse({webwebcam: "ACK"}); // content.js backgroundMessageHandler throws an error without this
             console.log(`tab ${sender.tab.id} active`);

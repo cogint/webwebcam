@@ -2,6 +2,9 @@ import {mungeH264} from "./modules/mungeH264.mjs";
 
 let video = document.querySelector('video');
 let changeCam = document.getElementById('changeCam');
+let changeMic = document.getElementById('changeMic');
+let flipCam = document.getElementById('flipCam');
+
 let status = document.getElementById('status');
 let controlsBar = document.getElementById('controlsBar');
 
@@ -12,11 +15,15 @@ const PEER_ID_LENGHT_MIN = 8;
 const PEER_ID_LENGHT_MAX = 20;
 
 
+// For switching media devices
 let videoDevices = [];
 let audioDevices = [];
+let videoIndex = 0;
+let audioIndex = 0;
+let currentVideoDeviceId = "";
+let currentAudioDeviceId = "";
 
-let index = 0;
-let currentDeviceId = "";
+
 let disablePeer = false;
 
 let peer, extCall; // Global holders for calls
@@ -41,16 +48,21 @@ function updateDevices(devices) {
         }
         if (device.kind === "audioinput") {
             // console.log(device);
-            videoDevices.push(device);
+            audioDevices.push(device);
         }
     });
-    window.deviceIds = videoDevices;
-    console.log("new device ids", videoDevices)
+
+    // For debugging
+    // window.videoDeviceIds = videoDevices;
+    // window.audioDeviceIds = audioDevices;
+    console.log("new video device ids", videoDevices);
+    console.log("new audio device ids", audioDevices);
+
 }
 
 // getUserMedia wrapper that checks for facing mode or device in case of mobile
 // ToDo: make this work for audio too
-async function getNextVideoDevice() {
+async function getNextDevice(video=false, audio=false) {
 
     const devices = await navigator.mediaDevices.enumerateDevices();
     updateDevices(devices);
@@ -61,20 +73,37 @@ async function getNextVideoDevice() {
             width: {ideal: 1920},
             height: {ideal: 1080}
         },
-        audio: true
+        audio: {
+
+        }
     };
 
-    index++;
+    if(video){
+        videoIndex++;
 
-    if (index >= videoDevices.length)
-        index = 0;
+        if (videoIndex >= videoDevices.length)
+            videoIndex = 0;
 
-    // If the next id happens to be the current selection, go to the next one
-    if (currentDeviceId === videoDevices[index].id)
-        index++;
+        // If the next id happens to be the current selection, go to the next one
+        if (currentVideoDeviceId === videoDevices[videoIndex].id)
+            videoIndex++;
 
+        constraints.video.deviceId = {exact: videoDevices[videoIndex].deviceId};
+    }
 
-    constraints.video.deviceId = {exact: videoDevices[index].deviceId};
+    if(audio){
+        audioIndex++;
+
+        if (audioIndex >= audioDevices.length)
+            audioIndex = 0;
+
+        // If the next id happens to be the current selection, go to the next one
+        if (currentAudioDeviceId === audioDevices[audioIndex].id)
+            audioIndex++;
+
+        constraints.audio.deviceId = {exact: audioDevices[audioIndex].deviceId};
+    }
+
 
     // How get the stream
     try {
@@ -84,13 +113,26 @@ async function getNextVideoDevice() {
 
         // window.stream = gumStream; // for debugging
 
-        let currentDeviceSettings = gumStream.getVideoTracks()[0].getSettings();
-        currentDeviceId = currentDeviceSettings.deviceId;
+        if(video){
+            let currentVideoDeviceSettings = gumStream.getVideoTracks()[0].getSettings();
+            currentVideoDeviceId = currentVideoDeviceSettings.deviceId;
 
-        // If the track is ended for sme reason go to the next one
-        if (gumStream.getVideoTracks()[0].readyState === "ended") {
-            console.log("new track unexpectedly ended, moving to the next one");
-            await getNextVideoDevice();
+            // If the track is ended for sme reason go to the next one
+            if (gumStream.getVideoTracks()[0].readyState === "ended") {
+                console.log("new track unexpectedly ended, moving to the next one");
+                await getNextDevice(audio, video);
+            }
+        }
+
+        if(audio){
+            let currentAudioDeviceSettings = gumStream.getAudioTracks()[0].getSettings();
+            currentVideoDeviceId = currentAudioDeviceSettings.deviceId;
+
+            // If the track is ended for sme reason go to the next one
+            if (gumStream.getAudioTracks()[0].readyState === "ended") {
+                console.log("new track unexpectedly ended, moving to the next one");
+                await getNextDevice(audio, video);
+            }
         }
 
         return gumStream;
@@ -100,35 +142,9 @@ async function getNextVideoDevice() {
 
 }
 
-changeCam.onclick = async () => {
-
-    // ToDo: sometimes the same camera comes back twice
-
-    status.innerText = "switching camera";
-    stopQrScan = true;
-
-    // ToDo: catch errors
-    let newStream = await getNextVideoDevice().catch(async err => {
-        console.error("error acquiring stream on changeCam", err);
-        // try again
-        console.log("Trying on the next video device");
-        newStream = await getNextVideoDevice();
-    });
-    console.log("new stream acquired", newStream);
-
-    if (newStream.id === currentStream.id) {
-        console.log("the same stream was returned, trying again");
-        newStream = await getNextVideoDevice().catch(err => console.error(err));
-        //ToDo: check deviceIds for the same?
-    }
-
-
-    // newStream.getTracks().forEach(track=>stream.addTrack(track));
-    adjustMirror(newStream);
-    video.srcObject = newStream;
-
-    console.log("extCall status", extCall);
+async function switchStream(newStream){
     if (extCall && extCall.open) {
+        console.log("extCall status", extCall);
 
         // replace the video track
         let videoSender = await extCall.peerConnection.getSenders().find(s => {
@@ -163,6 +179,63 @@ changeCam.onclick = async () => {
     window.stream = currentStream;
     newStream = null;
 
+}
+
+changeMic.onclick = async  ()=>{
+    status.innerText = "switching microphone";
+
+    let newStream = await getNextDevice(false, true).catch(async err => {
+        console.error("error acquiring stream on changeCam", err);
+        // try again
+        console.log("Trying on the next video device");
+        newStream = await getNextDevice(false, true);
+    });
+    console.log("new stream acquired", newStream);
+
+    if (newStream.id === currentStream.id) {
+        console.log("the same stream was returned, trying again");
+        newStream = await getNextDevice(false, true).catch(err => console.error(err));
+    }
+
+    video.srcObject = newStream;
+
+    await switchStream(newStream);
+
+};
+
+changeCam.onclick = async () => {
+
+    // ToDo: sometimes the same camera comes back twice
+
+    status.innerText = "switching camera";
+    stopQrScan = true;
+
+    let newStream = await getNextDevice(true, false).catch(async err => {
+        console.error("error acquiring stream on changeCam", err);
+        // try again
+        console.log("Trying on the next video device");
+        newStream = await getNextDevice(true, false);
+    });
+    console.log("new stream acquired", newStream);
+
+    if (newStream.id === currentStream.id) {
+        console.log("the same stream was returned, trying again");
+        newStream = await getNextDevice(true, false).catch(err => console.error(err));
+        //ToDo: check deviceIds for the same?
+    }
+
+
+    // newStream.getTracks().forEach(track=>stream.addTrack(track));
+    adjustMirror(newStream);
+    video.srcObject = newStream;
+
+    await switchStream(newStream);
+
+};
+
+flipCam.onclick = () => {
+    video.classList.toggle("mirror");
+    console.log("changed video mirroring");
 };
 
 let connExt = null;
@@ -344,11 +417,11 @@ function adjustMirror(stream){
     if(videoTrackSettings.facingMode){
         console.log(`current camera has facing mode: ${videoTrackSettings.facingMode}`);
         if(videoTrackSettings.facingMode === "environment" || label.match(/back|environment/i))
-            video.classList.remove(".mirror");
+            video.classList.remove("mirror");
         if(videoTrackSettings.facingMode === "user" || label.match(/front|user/i))
-            video.classList.add(".mirror");
+            video.classList.add("mirror");
         else
-            video.classList.add(".mirror");
+            video.classList.add("mirror");
     }
     else
         console.log("No facingMode constraint on current video track");
@@ -408,6 +481,12 @@ camPermissions().then(async permission => {
         };
     }
 }).catch(err => errorHandler(err));
+
+// enable poo-overs
+$(function () {
+    $('[data-toggle="tooltip"]').tooltip()
+});
+
 
 window.addEventListener('beforeunload', () => {
     if(peer)

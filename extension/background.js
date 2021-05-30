@@ -167,7 +167,7 @@ async function handlePeerDisconnect(origConn) {
 
         // ToDo: make a function / module for this
         // swap in the standby stream if the pageCall is already connected
-        if(pageCall.open){
+        if(pageCall && pageCall.open){
 
             // replace the video track
             let videoSender = await pageCall.peerConnection.getSenders().find(s => {

@@ -2,6 +2,9 @@ import {getStandbyStream} from "../modules/simStream.mjs";
 import {generateId} from "../modules/generateId.mjs";
 import {peerState} from "../modules/popupDisplayHandler.mjs"
 
+// ToDo: Environment variables
+const AUDIO_ENABLED = false;
+
 /**
  * Content.js communication
  */
@@ -136,6 +139,30 @@ function handleServerDisconnect(e) {
     peer.reconnect();
 }
 
+async function replaceTracks(stream){
+
+    // replace the video track
+    let videoSender = await pageCall.peerConnection.getSenders().find(s => {
+        return s.track.kind === "video";
+    });
+    console.log("videoSender", videoSender);
+    let newVideoTrack = stream.getVideoTracks()[0];
+    await videoSender.replaceTrack(newVideoTrack);
+
+    // replace the audio track
+    let audioSender = await pageCall.peerConnection.getSenders().find(s => {
+        return s.track.kind === "audio";
+    });
+
+    if(audioSender) {
+        console.log("audioSender", audioSender);
+        let newAudioTrack = stream.getAudioTracks()[0];
+        await audioSender.replaceTrack(newAudioTrack);
+    }
+    else console.log(`no audioSender in pageCall: ${pageCall.connectionId}`);
+
+}
+
 async function handlePeerDisconnect(origConn) {
 
     function manualClose(type){
@@ -166,24 +193,8 @@ async function handlePeerDisconnect(origConn) {
 
         // ToDo: make a function / module for this
         // swap in the standby stream if the pageCall is already connected
-        if(pageCall && pageCall.open){
-
-            // replace the video track
-            let videoSender = await pageCall.peerConnection.getSenders().find(s => {
-                return s.track.kind === "video";
-            });
-            console.log("videoSender", videoSender);
-            let newVideoTrack = standbyStream.getVideoTracks()[0];
-            await videoSender.replaceTrack(newVideoTrack);
-
-            // replace the audio track
-            let audioSender = await pageCall.peerConnection.getSenders().find(s => {
-                return s.track.kind === "audio";
-            });
-            console.log("audioSender", audioSender);
-            let newAudioTrack = standbyStream.getAudioTracks()[0];
-            await audioSender.replaceTrack(newAudioTrack);
-        }
+        if(pageCall && pageCall.open)
+            await replaceTracks(standbyStream);
 
     } else if (origConn.page) {
         console.log(`page peer ${origConn.type} disconnected`, origConn);
@@ -199,7 +210,7 @@ peer.on('open', async id => {
     console.log(`My peer ID is ${id}. Waiting for connections`);
 
     // I needed to put this somewhere for async
-    let stream = await getStandbyStream({method: "image", file: "assets/standby.png"});
+    let stream = await getStandbyStream({method: "image", file: "assets/standby.png", audioEnabled: AUDIO_ENABLED});
     window.previewVideo.srcObject = stream; // update open pop-uo
     window.standbyStream = stream;          // for debugging
     window.activeStream = stream;           // for the next time pop-up opens
@@ -314,24 +325,8 @@ peer.on('call', call => {
         window.remoteStream = stream; // for Debugging
 
         // swap out the standby stream if the pageCall is already connected
-        if(pageCall && pageCall.open){
-
-            // replace the video track
-            let videoSender = await pageCall.peerConnection.getSenders().find(s => {
-                return s.track.kind === "video";
-            });
-            console.log("videoSender", videoSender);
-            let newVideoTrack = stream.getVideoTracks()[0];
-            await videoSender.replaceTrack(newVideoTrack);
-
-            // replace the audio track
-            let audioSender = await pageCall.peerConnection.getSenders().find(s => {
-                return s.track.kind === "audio";
-            });
-            console.log("audioSender", audioSender);
-            let newAudioTrack = stream.getAudioTracks()[0];
-            await audioSender.replaceTrack(newAudioTrack);
-        }
+        if(pageCall && pageCall.open)
+            await replaceTracks(stream);
 
         peerState("call");
 

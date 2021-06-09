@@ -106,9 +106,9 @@ function audioFromWebAudio(volume = 0.05) {
 
 
 // combine audio + video
-export async function getStandbyStream({method='video', file, width = 1920, height = 1080, frameRate = 10, volume=0.05}) {
+export async function getStandbyStream({method='video', file, audioEnabled=true, width = 1920, height = 1080, frameRate = 10, volume=0.05}) {
 
-    let video;
+    let video, standbyStream;
 
     if(method==='video')
         video = await streamFromVideo(file, width, height, frameRate);
@@ -117,9 +117,17 @@ export async function getStandbyStream({method='video', file, width = 1920, heig
 
 
     let videoTrack = video.getVideoTracks()[0];
-    let audioTrack = audioFromWebAudio(volume).getAudioTracks()[0];
 
-    let standbyStream = await new MediaStream([videoTrack, audioTrack]);
+    if(audioEnabled) {
+        let audioTrack = audioFromWebAudio(volume).getAudioTracks()[0];
+        standbyStream = await new MediaStream([videoTrack, audioTrack]);
+    }
+    else{
+        console.log("Audio stream disabled. Proceeding with video only");
+        standbyStream = await new MediaStream([videoTrack]);
+    }
+
+
     console.log("created standbyStream", standbyStream.getTracks());
     return standbyStream
 

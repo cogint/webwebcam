@@ -9,6 +9,7 @@ let status = document.getElementById('status');
 let controlsBar = document.getElementById('controlsBar');
 
 const CALL_RETRY_PERIOD = 2 * 1000;
+const AUDIO_ENABLED = false;
 
 //ToDo: uses these in the regex match
 const PEER_ID_LENGHT_MIN = 8;
@@ -61,7 +62,6 @@ function updateDevices(devices) {
 }
 
 // getUserMedia wrapper that checks for facing mode or device in case of mobile
-// ToDo: make this work for audio too
 async function getNextDevice(video=false, audio=false) {
 
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -156,12 +156,15 @@ async function switchStream(newStream){
         await videoSender.replaceTrack(newVideoTrack);
 
         // replace the audio track
-        let audioSender = await extCall.peerConnection.getSenders().find(s => {
-            return s.track.kind === "audio";
-        });
-        console.log("audioSender", audioSender);
-        let newAudioTrack = newStream.getAudioTracks()[0];
-        await audioSender.replaceTrack(newAudioTrack);
+        if (AUDIO_ENABLED){
+            let audioSender = await extCall.peerConnection.getSenders().find(s => {
+                return s.track.kind === "audio";
+            });
+            console.log("audioSender", audioSender);
+            let newAudioTrack = newStream.getAudioTracks()[0];
+            await audioSender.replaceTrack(newAudioTrack);
+        }
+
 
         console.log("replaced preview stream track to peer");
         status.innerText = "connected to webwebcam extension";
@@ -329,23 +332,9 @@ function extPeer(peerId) {
 }
 
 
-// check gUM permissions
-async function camPermissions() {
-    // ToDo: adapt for FF & Safari
-    // this doesn't work on Safari or FF
 
-    return new Promise(async (resolve, reject) => {
-        navigator.permissions.query({name: "camera"})
-            .then(permission => {
-                console.log("gUM permission status", permission.state);
-                resolve(permission.state === "granted");
-            })
-            .catch(err => reject(err))
-    });
-}
-
+// QR scanning
 let stopQrScan = false;
-
 async function scanQr() {
 
     let canvas = document.createElement('canvas');
@@ -404,6 +393,7 @@ async function scanQr() {
     checkQr();
 }
 
+// Checks the URL to see if an ID is included
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.has("id") || urlParams.has("i")) {
     peerId = urlParams.get("id") || urlParams.get("i");
@@ -411,8 +401,7 @@ if (urlParams.has("id") || urlParams.has("i")) {
 }
 
 
-//window.addEventListener('DOMContentLoaded', ()=>{});
-
+// Flips the
 function adjustMirror(stream){
     const label = stream.getVideoTracks()[0].label;
     const videoTrackSettings = stream.getVideoTracks()[0].getSettings();
@@ -427,10 +416,11 @@ function adjustMirror(stream){
             video.classList.add("mirror");
     }
     else
-        console.log("No facingMode constraint on current video track");
+        console.log("No facingMode setting on current video track");
 }
 
 
+// Capture media
 async function startMedia() {
     let startingConstraints = {
         video: {
@@ -465,12 +455,41 @@ async function startMedia() {
     // Populate the device list
     navigator.mediaDevices.enumerateDevices().then(updateDevices);
 
+    // Go fullscreen
+    // ToDo: experiment with fullscreen for mobile; needs a gesture; check Safari
+    /*
+    const docEl = window.document.documentElement;
+    if(docEl.requestFullscreen)
+       await  docEl.requestFullscreen();
+     */
 
 }
 
+// check gUM permissions
+async function camPermissions() {
+    // ToDo: adapt for FF & Safari
+    // this doesn't work on Safari or FF
+
+    return new Promise(async (resolve, reject) => {
+
+        if(navigator.permissions && navigator.permissions.query){
+            navigator.permissions.query({name: "camera"})
+                .then(permission => {
+                    console.log("gUM permission status", permission.state);
+                    resolve(permission.state === "granted");
+                })
+                .catch(err => reject(err))
+        }
+        else {
+            resolve(false);
+        }
+    });
+}
+
+// Make sure there are camera permissions before starting media
 camPermissions().then(async permission => {
     if (permission) {
-        status.innerText = "acquiring camera and microphone";
+        status.innerText = AUDIO_ENABLED ? "acquiring camera and microphone": "acquiring camera";
         await startMedia();
 
     } else {

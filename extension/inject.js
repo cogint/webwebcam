@@ -7,6 +7,11 @@ let streamReady = false;          // are we connected to the phone?
 let shimActive = false;         // Checks to see if shim has been loaded
 let appEnabled = true;     // is phoneCam enabled? // ToDo: find an instant way to initialize this
 
+
+// ToDo: Environment variables
+const AUDIO_ENABLED = false;
+
+
 /*
  * helper function
  */
@@ -153,7 +158,7 @@ async function shimGetUserMedia(constraints) {
 
     // Check if we should override gUM with our own stream if webwebcam is requested
     let swapAudio = false;
-    if (hasAudio){
+    if (hasAudio && AUDIO_ENABLED){
         let audioConstraints = JSON.stringify(constraints.audio);
         if (audioConstraints.includes('webwebcam')){
             // Check if extension stream has an audioTrack to replace; this shouldn't happen
@@ -417,7 +422,8 @@ function enumDevicesShim() {
 
 
                 devices.push(fakeVideoDevice);
-                devices.push(fakeAudioDevice);
+                if (AUDIO_ENABLED)
+                    devices.push(fakeAudioDevice);
 
 
                 // ToDo: should I connect here?

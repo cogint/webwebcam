@@ -161,33 +161,47 @@ async function shimGetUserMedia(constraints) {
     if (hasAudio && AUDIO_ENABLED){
         let audioConstraints = JSON.stringify(constraints.audio);
         if (audioConstraints.includes('webwebcam')){
+            swapAudio = true;
+            constraints.audio = false
+            /*
+
             // Check if extension stream has an audioTrack to replace; this shouldn't happen
             if(!extStream.getAudioTracks || !extStream.getAudioTracks()[0].enabled){
                 logger("peer audio stream not available ");
-                audioConstraints.replace("webwebcam", "default");
+                audioConstraints.replace("webwebcam-audio", "default");
                 constraints.audio = JSON.parse(audioConstraints);
             }
             else {
                 swapAudio = true;
                 constraints.audio = false
             }
+
+             */
         }
     }
 
     let swapVideo = false;
     if (hasVideo){
+
         let videoConstraints = JSON.stringify(constraints.video);
+
         // Check if extension stream has an videoTrack to replace; this shouldn't happen
         if (videoConstraints.includes('webwebcam')){
+            swapVideo = true;
+            constraints.video = false
+
+            // ToDo: FIX THIS - PROBLEM AT THE PARSE. Is it needed?
+            /*
             if(!extStream.getVideoTracks || !extStream.getVideoTracks()[0].enabled){
-                logger("peer video stream not available ");
-                videoConstraints.replace("webwebcam", "default");
+                logger("extension video stream not available ");
+                videoConstraints.replace("webwebcam-video", "default");
                 constraints.video = JSON.parse(constraints.video);
             }
             else {
                 swapVideo = true;
                 constraints.video = false
             }
+             */
         }
     }
 

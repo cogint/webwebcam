@@ -3,13 +3,13 @@
 // ToDo: turn this back into an anonymous function
 
 let extStream = false;      // play something if no connection
-let streamReady = false;          // are we connected to the phone?
-let shimActive = false;         // Checks to see if shim has been loaded
-let appEnabled = true;     // is phoneCam enabled? // ToDo: find an instant way to initialize this
+let shimActive = false;     // Checks to see if shim has been loaded
+let appEnabled = true;      // is phoneCam enabled? // ToDo: find an instant way to initialize this
 
 
 // ToDo: Environment variables
 const AUDIO_ENABLED = false;
+const STREAM_WAIT_TIME = 1000;
 
 
 /*
@@ -99,7 +99,6 @@ async function connectPeer() {
     });
 
     async function handlePeerDisconnect(e) {
-        streamReady = false;
         logger("peer disconnected event", e);
         peer.destroy();
         // document.dispatchEvent(new CustomEvent('webwebcam-inject', {detail: {message: 'disconnected'}}));
@@ -122,7 +121,6 @@ async function connectPeer() {
 
             extStream = stream;
 
-            streamReady = true;
             // document.dispatchEvent(new CustomEvent('webwebcam-inject', {detail: {message: 'connected'}}));
 
         });
@@ -209,6 +207,7 @@ async function shimGetUserMedia(constraints) {
     // Add extStream tracks to the supplied stream
     async function swapTracks(stream) {
 
+
         if (swapAudio) {
             let extAudioTrack = extStream.getAudioTracks()[0];
 
@@ -232,7 +231,11 @@ async function shimGetUserMedia(constraints) {
             delete videoTrackConstraints.deviceId;
             delete videoTrackConstraints.groupId;
             delete videoTrackConstraints.facingMode;
+
+            logger("video track before",extVideoTrack.getSettings() );
+            logger("constraints to apply", videoTrackConstraints);
             await extVideoTrack.applyConstraints(videoTrackConstraints);
+            logger("video track after",extVideoTrack.getSettings() );
 
             let subsVideoTrack = extVideoTrack.clone();
 
@@ -250,8 +253,26 @@ async function shimGetUserMedia(constraints) {
         return origGetUserMedia(origConstraints)
     }
 
+    // extStream needs to be established by here.
+    // check to make sure it is there, if not give it some time before continuing or error out
+    if (!extStream){
+        logger("extStream not established... pausing");
+        await new Promise( (resolve, reject) => {
+            setTimeout(()=>{
+                if(extStream)
+                    resolve();
+                else{
+                    const err = new Error("webwebcam extension stream not available");
+                    reject(err);
+                }
+            }, STREAM_WAIT_TIME)
+        });
+
+    }
+
+
     // If there are only webwebcam sources to return
-    else if ((swapAudio && !hasVideo) || (swapVideo && !hasAudio) || (swapAudio && swapVideo)) {
+    if ((swapAudio && !hasVideo) || (swapVideo && !hasAudio) || (swapAudio && swapVideo)) {
         return new Promise(async (resolve, reject) => {
             try {
                 let stream = await swapTracks(new MediaStream());

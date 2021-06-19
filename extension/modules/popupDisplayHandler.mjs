@@ -1,8 +1,6 @@
-
-
 // Manage the pop-up display
-export function popupDisplayHandler(state, context=window){
-    switch (state){
+export function popupDisplayHandler(state, context = window) {
+    switch (state) {
         case "disconnected":
             context.statusMessage.innerText = "Remote disconnected (connection error)";
             context.qrInfo.classList.remove('d-none');
@@ -35,7 +33,7 @@ export function popupDisplayHandler(state, context=window){
 }
 
 
-if(!window.state)
+if (!window.state)
     window.state = "disconnected";
 
 
@@ -46,6 +44,8 @@ export function peerState(state) {
     } else if (window.state === "call" && state === "connected") {
         popupDisplayHandler("call");
         return "call";
+    } else if (window.state === state) {
+        return state
     } else {
         console.log(`Updated peerState: ${state}`);
 

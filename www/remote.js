@@ -1,4 +1,4 @@
-import {mungeH264} from "./modules/mungeH264.mjs";
+import {preferVP8} from "./modules/mungeH264.mjs";
 
 let video = document.querySelector('video');
 let changeCam = document.getElementById('changeCam');
@@ -27,7 +27,7 @@ let currentAudioDeviceId = "";
 
 let disablePeer = false;
 
-let peer, extCall; // Global holders for calls
+let peer, extCall, connExt; // Global holders for calls
 let peerId = false;
 let currentStream = null; // make this global for debugging
 
@@ -91,7 +91,7 @@ async function getNextDevice(video=false, audio=false) {
         constraints.video.deviceId = {exact: videoDevices[videoIndex].deviceId};
     }
 
-    if(audio){
+    else if(audio){
         audioIndex++;
 
         if (audioIndex >= audioDevices.length)
@@ -105,13 +105,16 @@ async function getNextDevice(video=false, audio=false) {
     }
 
 
-    // How get the stream
+    // Now get the stream
     try {
         console.log("attempting gUM with the following constraints: ", JSON.stringify(constraints));
 
         let gumStream = await navigator.mediaDevices.getUserMedia(constraints);
 
         // window.stream = gumStream; // for debugging
+
+        // ToDo: Fix the logic here.
+        // if(video && audio){}
 
         if(video){
             let currentVideoDeviceSettings = gumStream.getVideoTracks()[0].getSettings();
@@ -120,18 +123,18 @@ async function getNextDevice(video=false, audio=false) {
             // If the track is ended for sme reason go to the next one
             if (gumStream.getVideoTracks()[0].readyState === "ended") {
                 console.log("new track unexpectedly ended, moving to the next one");
-                await getNextDevice(audio, video);
+                await getNextDevice(video);
             }
         }
 
-        if(audio){
+        else if(audio){
             let currentAudioDeviceSettings = gumStream.getAudioTracks()[0].getSettings();
             currentVideoDeviceId = currentAudioDeviceSettings.deviceId;
 
             // If the track is ended for sme reason go to the next one
             if (gumStream.getAudioTracks()[0].readyState === "ended") {
                 console.log("new track unexpectedly ended, moving to the next one");
-                await getNextDevice(audio, video);
+                await getNextDevice(audio);
             }
         }
 
@@ -186,6 +189,16 @@ async function switchStream(newStream){
 }
 
 changeMic.onclick = async  ()=>{
+    if(!AUDIO_ENABLED){
+        const currentStatus = status.innerText;
+        status.innerText = "Sound support coming soon";
+        setTimeout( ()=>{
+            status.innerText = currentStatus;
+        }, 2000);
+        return
+    }
+
+
     status.innerText = "switching microphone";
 
     let newStream = await getNextDevice(false, true).catch(async err => {
@@ -244,8 +257,6 @@ flipCam.onclick = () => {
     console.log("changed video mirroring");
 };
 
-let connExt = null;
-
 function extPeer(peerId) {
 
     // For debugging
@@ -269,7 +280,7 @@ function extPeer(peerId) {
         console.log(`Disconnected. Trying reconnect to ${connExt.peer} in ${CALL_RETRY_PERIOD / 1000} seconds`);
         connTimeout = setTimeout(() => {
             if (!connExt.open) {
-                console.log(`Trying to connect to peer ${connExt} again`);
+                console.log(`Trying to reconnect to peer: `, connExt);
                 connExt = peer.connect(`${peerId}-ext`, {label: "remote<=>ext"});
             }
         }, CALL_RETRY_PERIOD);
@@ -279,21 +290,36 @@ function extPeer(peerId) {
     peer.on('open', async id => {
 
         console.log(`Connected to peerServer with id: ${id}`);
-        let connExt = peer.connect(`${peerId}-ext`);
+        connExt = peer.connect(`${peerId}-ext`);
 
         connExt.on('open', () => {
 
             console.log(`${peer.id}: Datachannel open with ${connExt.peer}`);
             connExt.on('data', function (data) {
                 console.log(`${peer.id}: Received ${JSON.stringify(data)}`);
+                if (data === "healthCheck")
+                    connExt.send("ping");
+
             });
+
+            connExt.send("hello from remote");
+
+            // health check
+
+            setInterval(()=>{
+                connExt.send("ping");
+            }, 1000)
+
+
         });
 
         // Send the preview video
         // Video should there
         if (currentStream && currentStream.active) {
             // ToD:  bug is preventing H.264 from working:
-            extCall = peer.call(`${peerId}-ext`, currentStream); //, {sdpTransform: mungeH264});
+            //extCall = peer.call(`${peerId}-ext`, currentStream);
+            extCall = peer.call(`${peerId}-ext`, currentStream, {sdpTransform: preferVP8}); // removeH264HighProfile
+
             console.log("initiated preview stream call");
             status.innerText = "connected to webwebcam extension";
 
@@ -307,6 +333,7 @@ function extPeer(peerId) {
                 status.innerText = "Extension disconnected.";
             });
         } else console.log("Local stream issue; skipping call", currentStream);
+
     });
 
     // User notice to install / check the extension
@@ -325,7 +352,7 @@ function extPeer(peerId) {
     });
 
     peer.on('disconnected', (e) => {
-        console.log(`${peer.id}: peer disconnected from server. Attempting to reconnect`, e);
+        console.log(`${e}: peer disconnected from server. Attempting to reconnect`);
         peer.reconnect();
     });
 
@@ -427,7 +454,7 @@ async function startMedia() {
             width: {ideal: 1920},
             height: {ideal: 1080},
             facingMode: {ideal: peerId ? "user" : "environment"} // If no QR ask for env cam
-        }, audio: true
+        }, audio: AUDIO_ENABLED
     };
 
 
@@ -509,8 +536,13 @@ $(function () {
     $('[data-toggle="tooltip"]').tooltip()
 });
 
-
 window.addEventListener('beforeunload', () => {
-    if(peer)
-        peer.destroy();
-});
+
+    console.log("beforeunload handler");
+
+    // https://github.com/peers/peerjs/issues/636
+    connExt.send("bye");
+    if(currentStream.active)
+        currentStream.getTracks().forEach(track => track.stop());
+    peer.destroy();
+}, {passive: true});

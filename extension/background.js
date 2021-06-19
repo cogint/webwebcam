@@ -139,7 +139,7 @@ function handleServerDisconnect(e) {
     peer.reconnect();
 }
 
-async function replaceTracks(stream){
+async function replaceTracks(stream) {
 
     // replace the video track
     let videoSender = await pageCall.peerConnection.getSenders().find(s => {
@@ -154,18 +154,17 @@ async function replaceTracks(stream){
         return s.track.kind === "audio";
     });
 
-    if(audioSender) {
+    if (audioSender) {
         console.log("audioSender", audioSender);
         let newAudioTrack = stream.getAudioTracks()[0];
         await audioSender.replaceTrack(newAudioTrack);
-    }
-    else console.log(`no audioSender in pageCall: ${pageCall.connectionId}`);
+    } else console.log(`no audioSender in pageCall: ${pageCall.connectionId}`);
 
 }
 
 async function handlePeerDisconnect(origConn) {
 
-    function manualClose(type){
+    function manualClose(type) {
         // close the peer connections
         for (let conns in peer.connections) {
             peer.connections[conns].forEach((conn, index, array) => {
@@ -184,8 +183,8 @@ async function handlePeerDisconnect(origConn) {
         }
     }
 
-    // ToDo: manage the difference between a page and remote
-    if (origConn.remote) {
+    // manage the difference between a page and remote
+    if (origConn.remote || origConn.peer.match(/-remote/)) {
         console.log(`remote peer ${origConn.type} disconnected`, origConn);
         manualClose("remote");
         peerState("closed");
@@ -193,15 +192,39 @@ async function handlePeerDisconnect(origConn) {
 
         // ToDo: make a function / module for this
         // swap in the standby stream if the pageCall is already connected
-        if(pageCall && pageCall.open)
+        if (pageCall && pageCall.open)
             await replaceTracks(standbyStream);
 
     } else if (origConn.page) {
         console.log(`page peer ${origConn.type} disconnected`, origConn);
         manualClose("page");
     } else {
+        // ToDo: bug here. This goes off when the remote disconnects. `origConn` doesn't contain .remote
         console.log("unrecognized peer", origConn)
     }
+}
+
+// ToDo: make this a class and handle the page connection too
+
+// Looks for a ping from the remote and resets a countdown timer
+// if timer is is exceeded send a message to remote with one last timer before disconnecting
+let pingTimeOut = false;
+async function pingHandler(conn){
+    if(pingTimeOut)
+        clearTimeout(pingTimeOut);
+    // wait for no ping
+    pingTimeOut = setTimeout(()=>{
+        console.log("ping timeout - checking connection..");
+        clearTimeout(pingTimeOut);
+
+        if(conn.open)
+            conn.send("healthCheck");
+
+        pingTimeOut = setTimeout(async()=>{
+            console.log("No response from peer - disconnecting");
+            await handlePeerDisconnect(conn);
+        }, 5000)
+    }, 5000)
 }
 
 
@@ -225,65 +248,76 @@ peer.on('connection', conn => {
     // ToDo: separate between remote & page for the message below - opens QR panel in popup
 
     conn.on('open', () => {
-            console.log(`Datachannel open with ${conn.peer}`);  //${conn.id}`);
-            // conn.send("hello");
+        console.log(`Datachannel open with ${conn.peer}`);  //${conn.id}`);
+        // conn.send("hello");
 
-            if (conn.peer === `${peerId}-remote`) {
-                conn.remote = true;
-                peerState("connected");
-            }
-            // Setup outgoing call
+        if (conn.peer === `${peerId}-remote`) {
+            conn.remote = true;
+            peerState("connected");
 
-            else if (conn.peer === `${peerId}-page`) {
-
-                // ToDo: this is happening more than once
-                conn.page = true;
-
-                // this should always pass
-                if (!window.activeStream.active) {
-                    console.log("Active stream stopped. Switching to standby stream");
-                    window.activeStream = window.standbyStream;
-                }
-
-                pageCall = peer.call(`${peerId}-page`, window.activeStream);
-                console.log(`started call to page`, pageCall);
-
-                // peerjs bug prevents this from firing: https://github.com/peers/peerjs/issues/636
-                pageCall.on('close', () => {
-                    console.log("call close event");
-                    handlePeerDisconnect(pageCall);
-                });
-
-                /*} else {
-                    console.error("Page call - issue with activeStream:", window.activeStream);
-                }*/
-            } else {
-                console.log("unrecognized peer: ", conn.peer);
-            }
         }
-    );
+        // Setup outgoing call
 
+        else if (conn.peer === `${peerId}-page`) {
 
-    // This is happening twice
-    conn.on('data', data => {
-        console.log(`Incoming data: ${data}`);
+            // ToDo: this is happening more than once
+            conn.page = true;
 
-        /*
-        if (data === "call me") {
-            console.log(`initiating call to ${conn.peer} with stream:`, activeStream);
-            peer.call(`${conn.peer}`, activeStream);
+            // this should always pass
+            if (!window.activeStream.active) {
+                console.log("Active stream stopped. Switching to standby stream");
+                window.activeStream = window.standbyStream;
+            }
+
+            pageCall = peer.call(`${peerId}-page`, window.activeStream);
+            console.log(`started call to page`, pageCall);
+
+            // peerjs bug prevents this from firing: https://github.com/peers/peerjs/issues/636
+            pageCall.on('close', async () => {
+                console.log("call close event");
+                await handlePeerDisconnect(pageCall);
+            });
+
+            /*} else {
+                console.error("Page call - issue with activeStream:", window.activeStream);
+            }*/
+        } else {
+            console.log("unrecognized peer: ", conn.peer);
         }
 
-        if (data === "bye") {
 
-        }*/
+        conn.on('data', async data => {
+
+            if(data === "ping"){
+                pingHandler(conn);
+                return
+            }
+
+
+            console.log(`Incoming data from ${conn.peer}: ${data}`);
+
+            /*
+            if (data === "call me") {
+                console.log(`initiating call to ${conn.peer} with stream:`, activeStream);
+                peer.call(`${conn.peer}`, activeStream);
+            }
+
+            */
+            if (data === "bye") {
+                console.log(`incoming bye event from ${conn.peer}`);
+                await handlePeerDisconnect(conn);
+                peerState("closed");
+            }
+        });
+
+        conn.on('close', async () => {
+            console.log("conn close event");
+            await handlePeerDisconnect(conn);
+            peerState("closed")
+        });
+
     });
 
-    conn.on('close', () => {
-        console.log("conn close event");
-        handlePeerDisconnect(conn);
-        peerState("closed")
-    });
 
     conn.on('error', err => {
         console.error(`peerjs error with ${conn.peer}`, err)
@@ -325,13 +359,13 @@ peer.on('call', call => {
         window.remoteStream = stream; // for Debugging
 
         // swap out the standby stream if the pageCall is already connected
-        if(pageCall && pageCall.open)
+        if (pageCall && pageCall.open)
             await replaceTracks(stream);
 
         peerState("call");
 
 
-        window.previewVideo.srcObject  = stream; // pop-up
+        window.previewVideo.srcObject = stream; // pop-up
 
     });
 

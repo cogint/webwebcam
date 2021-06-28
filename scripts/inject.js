@@ -60,7 +60,7 @@ async function connectPeer() {
         let parcelRequire = null;
 
         // ToDo: pass / load the extension ID so it is updated below or inject this as a module
-        await fetch('chrome-extension://cemghnpnocjajchopfooodogjcdabglm/peerjs.min.js')
+        await fetch('chrome-extension://cemghnpnocjajchopfooodogjcdabglm/scripts/peerjs.min.js')
             .then(resp => resp.text())
             .then(js => eval(js))
             .catch(err=>console.error("webwebcam: ", error));

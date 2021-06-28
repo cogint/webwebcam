@@ -104,7 +104,7 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
     // ToDo: this is loading twice sometimes
 
 
-    await fetch(chrome.runtime.getURL('inject.js') )
+    await fetch(chrome.runtime.getURL('scripts/inject.js') )
         .then(resp => resp.text())
         .then(scriptText => {
             if (peerId !== null)

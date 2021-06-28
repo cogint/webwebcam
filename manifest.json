@@ -2,7 +2,7 @@
   "content_scripts": [
     {
       "js": [
-        "content.js"
+        "scripts/content.js"
       ],
       "matches": [
         "http://*/*",
@@ -36,8 +36,8 @@
     "256": "/assets/webwebcam icon v2 - active 256.png"
   },
   "web_accessible_resources": [
-    "inject.js",
-    "peerjs.min.js"
+    "scripts/inject.js",
+    "scripts/peerjs.min.js"
   ],
   "content_security_policy": "script-src 'self' https://observertc.github.io https://www.gstatic.com https://www.googletagmanager.com; object-src 'self'"
 }

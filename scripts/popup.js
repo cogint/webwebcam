@@ -52,8 +52,7 @@ let previewVideo = document.querySelector('video');
 
 const backgroundWindow = chrome.extension.getBackgroundPage();
 
-previewVideo.srcObject = backgroundWindow.activeStream;
-enabledCheckbox.checked = backgroundWindow.enabled === "enabled";
+enabledCheckbox.checked = backgroundWindow.enabled;
 
 // Share/assign elements to background.js context
 backgroundWindow.statusMessage = peerStatus;
@@ -61,9 +60,10 @@ backgroundWindow.qrInfo = qrInfo;
 backgroundWindow.preview = preview;
 backgroundWindow.previewVideo = previewVideo;
 
+console.log(`state: ${backgroundWindow.state}`);
+
 // Sync DOM elements with existing states
 popupDisplayHandler(backgroundWindow.state, backgroundWindow);
-
 
 function updateId(generate = true){
     const id = generate ?  backgroundWindow.newId() : backgroundWindow.peerId;
@@ -77,8 +77,8 @@ enabledCheckbox.onchange= (e)=>{
     let status = e.target.checked;
     qrInfo.hidden = !status;
     peerStatus.hidden = !enabledCheckbox.checked;
-    console.log(`changed webwebcam status to: ${status ? "enabled": "disabled"}`);
-    backgroundWindow.enabledChange(status ? "enabled": "disabled");
+    console.log(`changed webwebcam status to: ${status}`);
+    backgroundWindow.enabledChange(status);
 };
 
 if(!backgroundWindow.peerId){
@@ -111,17 +111,25 @@ document.addEventListener('keydown', e=>{
     }
 
     if(e.key === 's'){
-        previewVideo.srcObject = backgroundWindow.standbyStream;
+        activeVideo.srcObject = backgroundWindow.standbyStream;
         console.log("set preview video to standbyStream");
     }
 
     if(e.key === 'r'){
-        previewVideo.srcObject = backgroundWindow.remoteStream;
+        activeVideo.srcObject = backgroundWindow.remoteStream;
         console.log("set preview video to remoteStream");
 
     }
 
 });
+
+/*
+if(backgroundWindow.state !== "paused"){
+    previewVideo.autoplay = true;
+    previewVideo.srcObject = backgroundWindow.activeStream;
+}
+
+*/
 
 
 /**

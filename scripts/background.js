@@ -51,7 +51,9 @@ function sendToTabs(message) {
 window.statusMessage = document.createElement('span');
 window.qrInfo = document.createElement('div');
 window.preview = document.createElement('div');
+window.activeVideo = document.createElement('video');
 window.previewVideo = document.createElement('video');
+
 
 // window.statusMessage.innerText = "uninitialized";
 
@@ -126,7 +128,7 @@ if (enabled !== null) {
 
 
 window.activeStream = new MediaStream();
-window.previewVideo.srcObject = activeStream;
+window.activeVideo.srcObject = activeStream;
 let remoteCall, pageCall; // holders for call objects
 
 let peer = new Peer(`${peerId}-ext`, {debug: 0});
@@ -188,7 +190,7 @@ async function handlePeerDisconnect(origConn) {
         console.log(`remote peer ${origConn.type} disconnected`, origConn);
         manualClose("remote");
         peerState("closed");
-        window.previewVideo.srcObject = standbyStream;
+        window.activeVideo.srcObject = standbyStream;
 
         // ToDo: make a function / module for this
         // swap in the standby stream if the pageCall is already connected
@@ -234,7 +236,7 @@ peer.on('open', async id => {
 
     // I needed to put this somewhere for async
     let stream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 1, audioEnabled: AUDIO_ENABLED});
-    window.previewVideo.srcObject = stream; // update open pop-uo
+    window.activeVideo.srcObject = stream; // update open pop-uo
     window.standbyStream = stream;          // for debugging
     window.activeStream = stream;           // for the next time pop-up opens
 
@@ -360,20 +362,65 @@ peer.on('call', call => {
             await replaceTracks(stream);
 
         peerState("call");
+        streamChecker();
 
-
-        window.previewVideo.srcObject = stream; // pop-up
+        window.activeVideo.srcObject = stream; // pop-up
 
     });
 
     // ToDo: bug prevents this from firing
     // https://github.com/peers/peerjs/issues/636
-    call.on('close', () => {
+    call.on('close', async () => {
         console.log("call close event");
-        handlePeerDisconnect(call);
+        await handlePeerDisconnect(call);
         peerState("closed");
     });
 
     call.answer();
 
 });
+
+// This doesn't work because the stream is paused when it is not displayed
+
+let streamCheckTimer;
+function streamChecker(){
+    //console.log(previewVideo.webkitDecodedFrameCount);
+    window.previewVideo.srcObject = activeStream;
+
+    let newState;
+
+    let lastCount = activeVideo.webkitDecodedFrameCount;
+    if(lastCount < 1)
+        peerState("paused");
+    else {
+        streamCheckTimer = setInterval(() => {
+            // console.log(activeVideo.webkitDecodedFrameCount);
+
+            const currentState = peerState();
+
+            if (currentState !== "call" && currentState !== "paused") {
+                console.info(`Invalid streamChecker state: ${currentState}`);
+                clearInterval(streamCheckTimer);
+                return
+            }
+
+            let currentCount = activeVideo.webkitDecodedFrameCount;
+            if (lastCount === currentCount) {
+                newState = "paused";
+
+            } else {
+                newState = "call";
+            }
+
+            if(newState !== currentState){
+                peerState(newState);
+                window.previewVideo.srcObject = newState === "paused" ? null : activeStream;
+
+            }
+
+            lastCount = currentCount;
+
+        }, 500);
+    }
+}
+

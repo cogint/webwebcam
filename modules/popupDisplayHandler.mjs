@@ -7,24 +7,30 @@ export function popupDisplayHandler(state, context = window) {
             context.preview.classList.add('d-none');
             break;
         case "waiting":
-            context.statusMessage.innerText = "Waiting for Remote connection";
+            context.statusMessage.innerText = "Waiting for remote connection";
             context.qrInfo.classList.remove('d-none');
             context.preview.classList.add('d-none');
             break;
         case "connected":
-            context.statusMessage.innerText = "Waiting for Remote stream";
+            context.statusMessage.innerText = "Waiting for remote stream";
             context.qrInfo.classList.add('d-none');
             context.preview.classList.add('d-none');
             break;
         case "closed":
-            context.statusMessage.innerText = "remote disconnected";
+            context.statusMessage.innerText = "Remote disconnected";
             context.qrInfo.classList.remove('d-none');
             context.preview.classList.add('d-none');
             break;
         case "call":
-            context.statusMessage.innerText = "remote stream available";
+            context.statusMessage.innerText = "Remote stream available";
             context.qrInfo.classList.add('d-none');
             context.preview.classList.remove('d-none');
+
+            break;
+        case "paused":
+            context.statusMessage.innerText = "Remote stream paused";
+            context.qrInfo.classList.add('d-none');
+            context.preview.classList.add('d-none');
             break;
         default:
             context.statusMessage.innerText = "Error: unhandled state";

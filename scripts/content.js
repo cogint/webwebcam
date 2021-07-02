@@ -42,7 +42,6 @@ function backgroundMessageHandler(message) {
     }
 
 
-    // ToDo: rename active to enabled; use "active" for streams, "enabled" for on/off
     let data = message.webwebcam;
 
     if (data === "ACK")
@@ -111,8 +110,8 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
                 scriptText = scriptText.replace("let peerId", `let peerId = "${peerId}"`);
 
             if (enabled !== null)
-                scriptText = scriptText.replace("let appEnabled = true",
-                    `let appEnabled = ${enabled === "enabled"}`);
+                scriptText = scriptText.replace("let appEnabled = false",
+                    `let appEnabled = ${enabled === true}`);
 
             // console.debug(scriptText);
             script.textContent = scriptText;

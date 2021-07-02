@@ -53,6 +53,7 @@ let previewVideo = document.querySelector('video');
 const backgroundWindow = chrome.extension.getBackgroundPage();
 
 enabledCheckbox.checked = backgroundWindow.enabled;
+qrInfo.hidden = !enabledCheckbox.checked;
 
 // Share/assign elements to background.js context
 backgroundWindow.statusMessage = peerStatus;

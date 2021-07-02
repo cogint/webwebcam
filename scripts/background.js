@@ -23,9 +23,9 @@ chrome.runtime.onMessage.addListener(
 
         if (request.webwebcam === "hello") {
             sendResponse({webwebcam: "ACK"}); // content.js backgroundMessageHandler throws an error without this
-            console.log(`tab ${sender.tab.id} active`);
+            console.log(`tab ${sender.tab.id} open`);
         } else if (request.webwebcam === "needData") {
-            let data = {webwebcam: {active: enabled ? "active" : "inactive", peerId: peerId}};
+            let data = {webwebcam: {active: enabled, peerId: peerId}};
             sendResponse(data);
             console.log("sent this to content.js", data);
         }
@@ -109,7 +109,7 @@ if (peerId) {
 
 // Check enabled status
 
-let enabled = localStorage.getItem("enabled");
+let enabled = JSON.parse(localStorage.getItem("enabled"));
 console.log(`enabled is set to ${enabled}`);
 if (enabled !== null) {
     window.enabled = enabled;
@@ -234,7 +234,8 @@ peer.on('open', async id => {
     peerState("waiting");
     console.log(`My peer ID is ${id}. Waiting for connections`);
 
-    // I needed to put this somewhere for async
+    // ToDo: put this somewhere else
+
     let stream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 1, audioEnabled: AUDIO_ENABLED});
     window.activeVideo.srcObject = stream; // update open pop-uo
     window.standbyStream = stream;          // for debugging
@@ -259,14 +260,25 @@ peer.on('connection', conn => {
 
         else if (conn.peer === `${peerId}-page`) {
 
-            // ToDo: this is happening more than once
+            // this was happening more than once - is it still?
             conn.page = true;
 
-            // this should always pass
             if (!window.activeStream.active) {
                 console.log("Active stream stopped. Switching to standby stream");
                 window.activeStream = window.standbyStream;
             }
+
+            // ToDo: moved standby stream setup here - test handling
+            /*
+            if (!window.activeStream && !window.activeStream.active) {
+                console.log("No stream stopped. Starting standby stream");
+                let stream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 1, audioEnabled: AUDIO_ENABLED});
+                window.activeVideo.srcObject = stream; // update open pop-uo
+                window.standbyStream = stream;          // for debugging
+                window.activeStream = stream;           // for the next time pop-up opens
+            }
+
+             */
 
             pageCall = peer.call(`${peerId}-page`, window.activeStream);
             console.log(`started call to page`, pageCall);
@@ -274,6 +286,7 @@ peer.on('connection', conn => {
             // peerjs bug prevents this from firing: https://github.com/peers/peerjs/issues/636
             pageCall.on('close', async () => {
                 console.log("call close event");
+                // stopStandbyStream(window.standbyStream);
                 await handlePeerDisconnect(pageCall);
             });
 
@@ -380,7 +393,6 @@ peer.on('call', call => {
 
 });
 
-// This doesn't work because the stream is paused when it is not displayed
 
 let streamCheckTimer;
 function streamChecker(){

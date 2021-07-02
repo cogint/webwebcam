@@ -4,7 +4,7 @@
 
 let extStream = false;      // play something if no connection
 let shimActive = false;     // Checks to see if shim has been loaded
-let appEnabled = true;      // is phoneCam enabled? // ToDo: find an instant way to initialize this
+let appEnabled = false;      // is phoneCam enabled? // ToDo: find an instant way to initialize this
 
 
 // ToDo: Environment variables
@@ -495,6 +495,9 @@ window.addEventListener('beforeunload', () => {
 
 }, {passive: true});
 
+// ToDo: this disable / enable isn't working right
+// Change enabledState to a boolean
+// Old comment: I think I need to keep shims always active for it to work
 
 document.addEventListener('webwebcam-content', e => {
     logger('content.js event data', e.detail);
@@ -505,7 +508,7 @@ document.addEventListener('webwebcam-content', e => {
 
         let currentPhonecamEnabled = appEnabled;
 
-        appEnabled = enabledState === "enabled";
+        appEnabled = enabledState; // === "enabled";
 
         if (currentPhonecamEnabled === appEnabled) {
             logger(`No change to enabled state. It is still ${appEnabled}`);
@@ -514,8 +517,7 @@ document.addEventListener('webwebcam-content', e => {
 
         logger(`appEnabled is now ${appEnabled}`);
 
-        // ToDo: this disable / enable isn't working right
-        // I think I need to keep shims always active for it to work
+
 
         /*
          * Disable
@@ -549,7 +551,7 @@ document.addEventListener('webwebcam-content', e => {
         /*
          * Enable
          */
-        if (appEnabled === false && enabledState === "enabled") {
+        if (appEnabled === false && enabledState){ //=== "enabled") {
             logger("enabling shims");
             shimGum();
             navigator.mediaDevices.enumerateDevices = enumDevicesShim;

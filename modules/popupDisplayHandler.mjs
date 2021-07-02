@@ -32,6 +32,12 @@ export function popupDisplayHandler(state, context = window) {
             context.qrInfo.classList.add('d-none');
             context.preview.classList.add('d-none');
             break;
+        // ToDo: implement this state elsewhere
+        case "disabled":
+            context.statusMessage.innerText = "webwebcam disabled";
+            context.qrInfo.classList.add('d-none');
+            context.preview.classList.add('d-none');
+            break;
         default:
             context.statusMessage.innerText = "Error: unhandled state";
             console.error("uncovered state in popupDisplayHandler", state)

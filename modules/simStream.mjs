@@ -2,8 +2,12 @@
  * Generates a stream from generated sources (not a webcam)
  */
 
+// ToDo: turn this whole file into a class
+
+let vidFromImgInterval = false; // Needed to stop videoFromImage
+
 // Stream from a static image
-function videoFromImage(imageFile, width = 1920, height = 1080, frameRate = 10) {
+function videoFromImage(imageFile, width = 1920, height = 1080, frameRate = 10, frameShiftFreq = 10) {
 
     try {
         const img = new Image();
@@ -16,24 +20,34 @@ function videoFromImage(imageFile, width = 1920, height = 1080, frameRate = 10) 
 
         const ctx = canvas.getContext('2d');
 
-        // ToDo: see if an requestAnimationFrame reduces CPU
+        // finding: see if an requestAnimationFrame reduces CPU
+        // - it didn't; it doesn't play at unless it is locally displayed by popup.js
+        // that would work ok if we pushed simstream to the tab
 
-        // Shift the image slightly every 2 seconds
-        const offset = 7;
-        const imgShiftTimer = 2 * 1000;
+        // Shift the image slightly every n frames
+
+        // How many frames to shift the image
+        // needed ot prevent frozen video checkers from triggering
+        const offset = 7; //7
         let randOffset = Math.floor(Math.random() * offset + 1);
-        setInterval(() => {
-            randOffset = Math.floor(Math.random() * offset + 1);
-        }, imgShiftTimer);
+        let offsetCounter = 0;
+
 
         // Needed otherwise the remote video never starts
-        setInterval(() => {
-            // ctx.fillRect(0, 0, width, height);
+        vidFromImgInterval = setInterval(() => {
+            // Shift the image slightly every frameShiftFreq frames
+            offsetCounter++;
+            if(offsetCounter > frameShiftFreq){
+                randOffset = Math.floor(Math.random() * offset + 1);
+                offsetCounter = 0;
+            }
+
             ctx.drawImage(img, randOffset, randOffset, width, height);
         }, 1 / frameRate);
 
         let stream = canvas.captureStream(frameRate);
 
+        // ToDo: overload MedaiStreamTrack to assign a custom video track label
         // This didn't work
         // let videoTrack = stream.getVideoTracks()[0];
         // videoTrack.label = "WebWebCam Standby";
@@ -128,6 +142,11 @@ export async function getStandbyStream({method = 'video', file, audioEnabled = t
     console.log("created standbyStream", standbyStream.getTracks());
     return standbyStream
 
-
 }
 
+export function stopStandbyStream(stream){
+    if(vidFromImgInterval)
+        clearInterval(vidFromImgInterval);
+    stream.getTracks().forEach(track=>track.stop());
+    console.log("standbyStream stopped");
+}

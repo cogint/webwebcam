@@ -1,4 +1,4 @@
-import {getStandbyStream} from "../modules/simStream.mjs";
+import {getStandbyStream, stopStandbyStream} from "../modules/simStream.mjs";
 import {generateId} from "../modules/generateId.mjs";
 import {peerState} from "../modules/popupDisplayHandler.mjs"
 
@@ -151,11 +151,15 @@ async function replaceTracks(stream) {
     let newVideoTrack = stream.getVideoTracks()[0];
     await videoSender.replaceTrack(newVideoTrack);
 
-    // replace the audio track
-    let audioSender = await pageCall.peerConnection.getSenders().find(s => {
-        return s.track.kind === "audio";
-    });
+    let audioSender = AUDIO_ENABLED;
+    if(AUDIO_ENABLED){
+        // check for an audio track
+        audioSender = await pageCall.peerConnection.getSenders().find(s => {
+            return s.track.kind === "audio";
+        });
+    }
 
+    // replace the audio track
     if (audioSender) {
         console.log("audioSender", audioSender);
         let newAudioTrack = stream.getAudioTracks()[0];
@@ -236,18 +240,19 @@ peer.on('open', async id => {
 
     // ToDo: put this somewhere else
 
+    /*
     let stream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 1, audioEnabled: AUDIO_ENABLED});
     window.activeVideo.srcObject = stream; // update open pop-uo
     window.standbyStream = stream;          // for debugging
     window.activeStream = stream;           // for the next time pop-up opens
-
+     */
 });
 
 peer.on('connection', conn => {
 
     console.log("connection:", conn);
 
-    conn.on('open', () => {
+    conn.on('open', async () => {
         console.log(`Datachannel open with ${conn.peer}`);  //${conn.id}`);
         // conn.send("hello");
 
@@ -263,22 +268,24 @@ peer.on('connection', conn => {
             // this was happening more than once - is it still?
             conn.page = true;
 
+            /*
             if (!window.activeStream.active) {
                 console.log("Active stream stopped. Switching to standby stream");
                 window.activeStream = window.standbyStream;
             }
+             */
 
             // ToDo: moved standby stream setup here - test handling
-            /*
-            if (!window.activeStream && !window.activeStream.active) {
+
+            if (!window.activeStream.active) {
                 console.log("No stream stopped. Starting standby stream");
-                let stream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 1, audioEnabled: AUDIO_ENABLED});
+                let stream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 5, audioEnabled: AUDIO_ENABLED});
                 window.activeVideo.srcObject = stream; // update open pop-uo
                 window.standbyStream = stream;          // for debugging
                 window.activeStream = stream;           // for the next time pop-up opens
             }
 
-             */
+
 
             pageCall = peer.call(`${peerId}-page`, window.activeStream);
             console.log(`started call to page`, pageCall);
@@ -286,7 +293,7 @@ peer.on('connection', conn => {
             // peerjs bug prevents this from firing: https://github.com/peers/peerjs/issues/636
             pageCall.on('close', async () => {
                 console.log("call close event");
-                // stopStandbyStream(window.standbyStream);
+                stopStandbyStream(window.standbyStream);
                 await handlePeerDisconnect(pageCall);
             });
 

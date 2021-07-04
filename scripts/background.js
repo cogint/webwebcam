@@ -286,7 +286,6 @@ peer.on('connection', conn => {
             }
 
 
-
             pageCall = peer.call(`${peerId}-page`, window.activeStream);
             console.log(`started call to page`, pageCall);
 

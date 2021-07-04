@@ -8,6 +8,7 @@ let appEnabled = false;      // is phoneCam enabled? // ToDo: find an instant wa
 
 
 // ToDo: Environment variables
+const EXTENSION_ID = null;
 const AUDIO_ENABLED = false;
 const STREAM_WAIT_TIME = 1000;
 
@@ -54,16 +55,15 @@ async function connectPeer() {
         // ToDo: bundle this
         logger("loading peerjs script");
 
-        // ToDo: there is some error here
         //await fetch('https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js')
 
         let parcelRequire = null;
 
         // ToDo: pass / load the extension ID so it is updated below or inject this as a module
-        await fetch('chrome-extension://cemghnpnocjajchopfooodogjcdabglm/scripts/peerjs.min.js')
+        await fetch(`chrome-extension://${EXTENSION_ID}/scripts/peerjs.min.js`)
             .then(resp => resp.text())
             .then(js => eval(js))
-            .catch(err=>console.error("webwebcam: ", error));
+            .catch(err=>console.error("webwebcam: ", err));
     }
 
     if (peer) {
@@ -71,12 +71,12 @@ async function connectPeer() {
         return
     }
 
-    // ToDo: update this - handler was removed in content.js
+    /*
     if (!peerId) {
-        // ToDo: prevent multiple dispatches before a response
         document.dispatchEvent(new CustomEvent('webwebcam-inject', {detail: {message: 'getId'}}));
         return;
     }
+    */
 
     // ToDo: change this to tabId for multi-tag
     peer = new window.Peer(`${peerId}-page`, {debug: 2});
@@ -91,12 +91,15 @@ async function connectPeer() {
         })
     });
 
-    // ToDo: this doesn't fire
+    
+    /*
+    // this doesn't fire
     peer.on('connection', conn => {
         conn.on('data', data => logger(`Incoming data: ${data}`));
         logger("connection:", conn);
 
     });
+     */
 
     async function handlePeerDisconnect(e) {
         logger("peer disconnected event", e);

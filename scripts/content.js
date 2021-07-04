@@ -100,12 +100,16 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
      */
 
 
-    // ToDo: this is loading twice sometimes
 
+    // ToDo: this is loading twice sometimes
 
     await fetch(chrome.runtime.getURL('scripts/inject.js') )
         .then(resp => resp.text())
         .then(scriptText => {
+            // set variables inside the script
+
+            scriptText = scriptText.replace(`const EXTENSION_ID = null`, `const EXTENSION_ID = "${chrome.runtime.id}"` )
+
             if (peerId !== null)
                 scriptText = scriptText.replace("let peerId", `let peerId = "${peerId}"`);
 
@@ -131,3 +135,4 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
 sendToBackground("hello");
 
 console.debug("webwebcam content: content.js loaded");
+// console.debug(chrome.runtime.id);

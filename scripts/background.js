@@ -12,7 +12,10 @@ let lastActiveTabId;        // ToDo: what happens with multiple tabs?
 
 chrome.runtime.onMessage.addListener(
     function (request, sender, sendResponse) {
-        console.log(`message from tab ${sender.tab.id} on ${sender.tab.url}`, request);
+        // ToDo: Edge doesn't have a sender.tab object
+
+        //console.log(sender);
+        console.log(`message from tab ${sender.tab ? sender.tab.id : "undefined id"} on ${sender.tab ? sender.tab.url : "undefined url"}`, request);
 
         if (request.webwebcam)
             lastActiveTabId = sender.tab.id;
@@ -151,20 +154,20 @@ async function replaceTracks(stream) {
     let newVideoTrack = stream.getVideoTracks()[0];
     await videoSender.replaceTrack(newVideoTrack);
 
-    let audioSender = AUDIO_ENABLED;
     if(AUDIO_ENABLED){
         // check for an audio track
-        audioSender = await pageCall.peerConnection.getSenders().find(s => {
+        let audioSender = await pageCall.peerConnection.getSenders().find(s => {
             return s.track.kind === "audio";
         });
+
+        // replace the audio track
+        if (audioSender) {
+            console.log("audioSender", audioSender);
+            let newAudioTrack = stream.getAudioTracks()[0];
+            await audioSender.replaceTrack(newAudioTrack);
+        } else console.log(`no audioSender in pageCall: ${pageCall.connectionId}`);
     }
 
-    // replace the audio track
-    if (audioSender) {
-        console.log("audioSender", audioSender);
-        let newAudioTrack = stream.getAudioTracks()[0];
-        await audioSender.replaceTrack(newAudioTrack);
-    } else console.log(`no audioSender in pageCall: ${pageCall.connectionId}`);
 
 }
 

@@ -28,7 +28,7 @@ function videoFromImage(imageFile, width = 1920, height = 1080, frameRate = 10, 
 
         // How many frames to shift the image
         // needed ot prevent frozen video checkers from triggering
-        const offset = 7; //7
+        const offset = 3; //7
         let randOffset = Math.floor(Math.random() * offset + 1);
         let offsetCounter = 0;
 

@@ -120,7 +120,10 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
             // console.debug(scriptText);
             script.textContent = scriptText;
 
-            script.onload = () => this.remove;
+            script.onload = () => {
+                console.debug("webwebcam content: webwebcam inject script loaded");
+                document.head.removeChild(this)
+            };
             // ToDo: add to head or body? append or prepend?
             (document.head || document.documentElement).appendChild(script);
 

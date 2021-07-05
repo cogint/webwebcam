@@ -124,13 +124,11 @@ document.addEventListener('keydown', e=>{
 
 });
 
-/*
-if(backgroundWindow.state !== "paused"){
-    previewVideo.autoplay = true;
+
+if(backgroundWindow.state !== "paused" && backgroundWindow.activeStream && backgroundWindow.activeStream.active){
     previewVideo.srcObject = backgroundWindow.activeStream;
 }
 
-*/
 
 
 /**

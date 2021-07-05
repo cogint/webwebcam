@@ -1,3 +1,4 @@
+// Inserted by webwwebcam browser extension. See webwebcam.com for details.
 'use strict';
 
 // ToDo: turn this back into an anonymous function
@@ -91,7 +92,7 @@ async function connectPeer() {
         })
     });
 
-    
+
     /*
     // this doesn't fire
     peer.on('connection', conn => {

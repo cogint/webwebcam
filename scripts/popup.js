@@ -50,7 +50,7 @@ let peerStatus = document.getElementById('peerStatus');
 let preview = document.getElementById('preview');
 let previewVideo = document.querySelector('video');
 
-const backgroundWindow = chrome.extension.getBackgroundPage();
+let backgroundWindow = chrome.extension.getBackgroundPage();
 
 enabledCheckbox.checked = backgroundWindow.enabled;
 qrInfo.hidden = !enabledCheckbox.checked;
@@ -106,18 +106,20 @@ copyLink.onclick = async () => {
 
 // Key handler to help with debugging
 document.addEventListener('keydown', e=>{
+    backgroundWindow = chrome.extension.getBackgroundPage();
+
     if(e.key === '.'){
         console.log(`${e.key} pressed`);
         preview.classList.toggle('d-none');
     }
 
     if(e.key === 's'){
-        activeVideo.srcObject = backgroundWindow.standbyStream;
+        previewVideo.srcObject = backgroundWindow.standbyStream;
         console.log("set preview video to standbyStream");
     }
 
     if(e.key === 'r'){
-        activeVideo.srcObject = backgroundWindow.remoteStream;
+        previewVideo.srcObject = backgroundWindow.remoteStream;
         console.log("set preview video to remoteStream");
 
     }

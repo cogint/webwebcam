@@ -14,8 +14,8 @@ chrome.runtime.onMessage.addListener(
     function (request, sender, sendResponse) {
         // ToDo: Edge doesn't have a sender.tab object
 
-        //console.log(sender);
-        console.log(`message from tab ${sender.tab ? sender.tab.id : "undefined id"} on ${sender.tab ? sender.tab.url : "undefined url"}`, request);
+        // console.log(sender);
+        // console.log(`message from tab ${sender.tab ? sender.tab.id : "undefined id"} on ${sender.tab ? sender.tab.url : "undefined url"}`, request);
 
         if (request.webwebcam)
             lastActiveTabId = sender.tab.id;
@@ -26,11 +26,13 @@ chrome.runtime.onMessage.addListener(
 
         if (request.webwebcam === "hello") {
             sendResponse({webwebcam: "ACK"}); // content.js backgroundMessageHandler throws an error without this
-            console.log(`tab ${sender.tab.id} open`);
+            console.log(`tab ${sender.tab.id} open - ${sender.tab.url}`);
         } else if (request.webwebcam === "needData") {
             let data = {webwebcam: {active: enabled, peerId: peerId}};
             sendResponse(data);
             console.log("sent this to content.js", data);
+        } else {
+            console.log(`message from tab ${sender.tab ? sender.tab.id : "undefined id"} on ${sender.tab ? sender.tab.url : "undefined url"}`, request);
         }
     });
 
@@ -197,7 +199,14 @@ async function handlePeerDisconnect(origConn) {
         console.log(`remote peer ${origConn.type} disconnected`, origConn);
         manualClose("remote");
         peerState("closed");
-        window.activeVideo.srcObject = standbyStream;
+
+
+        //Switch to the standby stream
+        let standbyStream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 5, audioEnabled: AUDIO_ENABLED});
+
+        window.activeVideo.srcObject = standbyStream;   // update open pop-uo
+        window.standbyStream = standbyStream;          // for debugging
+        window.activeStream = standbyStream;           // for the next time pop-up opens
 
         // ToDo: make a function / module for this
         // swap in the standby stream if the pageCall is already connected

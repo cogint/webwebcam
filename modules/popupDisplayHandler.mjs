@@ -53,7 +53,7 @@ export function peerState(state) {
     if (!state) {
         popupDisplayHandler(window.state);
         return window.state;
-    } else if (window.state === "call" && state === "connected") {
+    } else if (window.state === "call" && ( state === "connected" || state === "paused")) {
         popupDisplayHandler("call");
         return "call";
     } else if (window.state === state) {

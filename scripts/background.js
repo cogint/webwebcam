@@ -125,6 +125,28 @@ if (enabled !== null) {
     enabledChange(true, true)
 }
 
+/**
+ * stream variables
+ * Add to window for easier debugging
+ */
+
+
+
+window.activeStream = new MediaStream();
+window.activeVideo.srcObject = window.activeStream;
+
+
+async function startStandby(){
+    let stream = window.standbyStream;
+    console.log("No stream ready. Starting standby stream");
+    if(!stream || !stream.active)
+        stream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 5, audioEnabled: AUDIO_ENABLED});
+    window.activeVideo.srcObject = stream; // update open pop-uo
+    window.activeStream = stream;           // for the next time pop-up opens
+    return stream;
+}
+
+
 // ToDo: handle user manually refreshing extension
 
 /**
@@ -132,8 +154,7 @@ if (enabled !== null) {
  */
 
 
-window.activeStream = new MediaStream();
-window.activeVideo.srcObject = activeStream;
+
 let remoteCall, pageCall; // holders for call objects
 
 let peer = new Peer(`${peerId}-ext`, {debug: 0});
@@ -174,6 +195,18 @@ async function replaceTracks(stream) {
 }
 
 async function handlePeerDisconnect(origConn) {
+    console.log(origConn);
+
+    if(origConn.closing){
+        console.log("handlePeerDisconnect - conn already closed");
+        return
+    }
+
+    origConn.closing = true;
+
+
+    // stop the ping server
+    clearTimeout(pingTimeOut);
 
     function manualClose(type) {
         // close the peer connections
@@ -198,20 +231,12 @@ async function handlePeerDisconnect(origConn) {
     if (origConn.remote || origConn.peer.match(/-remote/)) {
         console.log(`remote peer ${origConn.type} disconnected`, origConn);
         manualClose("remote");
-        peerState("closed");
 
-
-        //Switch to the standby stream
-        let standbyStream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 5, audioEnabled: AUDIO_ENABLED});
-
-        window.activeVideo.srcObject = standbyStream;   // update open pop-uo
-        window.standbyStream = standbyStream;          // for debugging
-        window.activeStream = standbyStream;           // for the next time pop-up opens
-
-        // ToDo: make a function / module for this
         // swap in the standby stream if the pageCall is already connected
-        if (pageCall && pageCall.open)
-            await replaceTracks(standbyStream);
+        if (pageCall && pageCall.open){
+            window.standbyStream = await startStandby();
+            await replaceTracks(window.standbyStream);
+        }
 
     } else if (origConn.page) {
         console.log(`page peer ${origConn.type} disconnected`, origConn);
@@ -220,6 +245,8 @@ async function handlePeerDisconnect(origConn) {
         // ToDo: bug here. This goes off when the remote disconnects. `origConn` doesn't contain .remote
         console.log("unrecognized peer", origConn)
     }
+    peerState("closed");
+
 }
 
 // ToDo: make this a class and handle the page connection too
@@ -249,15 +276,6 @@ async function pingHandler(conn){
 peer.on('open', async id => {
     peerState("waiting");
     console.log(`My peer ID is ${id}. Waiting for connections`);
-
-    // ToDo: put this somewhere else
-
-    /*
-    let stream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 1, audioEnabled: AUDIO_ENABLED});
-    window.activeVideo.srcObject = stream; // update open pop-uo
-    window.standbyStream = stream;          // for debugging
-    window.activeStream = stream;           // for the next time pop-up opens
-     */
 });
 
 peer.on('connection', conn => {
@@ -289,22 +307,31 @@ peer.on('connection', conn => {
 
             // ToDo: moved standby stream setup here - test handling
 
-            if (!window.activeStream.active) {
-                console.log("No stream stopped. Starting standby stream");
-                let stream = await getStandbyStream({method: "image", file: "assets/standby.png",  width: 1280, height: 720, frameRate: 5, audioEnabled: AUDIO_ENABLED});
-                window.activeVideo.srcObject = stream; // update open pop-uo
-                window.standbyStream = stream;          // for debugging
-                window.activeStream = stream;           // for the next time pop-up opens
+            if (!window.activeStream.active){
+                console.log("About to make call and no activeStream. Starting standby..");
+                await startStandby();
             }
 
 
             pageCall = peer.call(`${peerId}-page`, window.activeStream);
             console.log(`started call to page`, pageCall);
+            peerState("call");
+
+
+            // ToDo: handle error conditions
+            pageCall.on('error', async err=>{
+                console.error(err);
+                await handlePeerDisconnect(pageCall);
+            });
+
 
             // peerjs bug prevents this from firing: https://github.com/peers/peerjs/issues/636
             pageCall.on('close', async () => {
                 console.log("call close event");
-                stopStandbyStream(window.standbyStream);
+                if(window.standbyStream){
+                    stopStandbyStream(window.standbyStream);
+                    window.standbyStream = false;
+                }
                 await handlePeerDisconnect(pageCall);
             });
 
@@ -336,14 +363,14 @@ peer.on('connection', conn => {
             if (data === "bye") {
                 console.log(`incoming bye event from ${conn.peer}`);
                 await handlePeerDisconnect(conn);
-                peerState("closed");
+                // peerState("closed");
             }
         });
 
         conn.on('close', async () => {
             console.log("conn close event");
             await handlePeerDisconnect(conn);
-            peerState("closed")
+            // peerState("closed")
         });
 
     });
@@ -402,9 +429,10 @@ peer.on('call', call => {
     // ToDo: bug prevents this from firing
     // https://github.com/peers/peerjs/issues/636
     call.on('close', async () => {
-        console.log("call close event");
-        await handlePeerDisconnect(call);
-        peerState("closed");
+        console.log("call close event", call);
+
+        // await handlePeerDisconnect(rem);
+        // peerState("closed");
     });
 
     call.answer();
@@ -415,7 +443,7 @@ peer.on('call', call => {
 let streamCheckTimer;
 function streamChecker(){
     //console.log(previewVideo.webkitDecodedFrameCount);
-    window.previewVideo.srcObject = activeStream;
+    window.previewVideo.srcObject = window.activeStream;
 
     let newState;
 
@@ -444,7 +472,7 @@ function streamChecker(){
 
             if(newState !== currentState){
                 peerState(newState);
-                window.previewVideo.srcObject = newState === "paused" ? null : activeStream;
+                window.previewVideo.srcObject = newState === "paused" ? null : window.activeStream;
 
             }
 

@@ -26,13 +26,15 @@ chrome.runtime.onMessage.addListener(
 
         if (request.webwebcam === "hello") {
             sendResponse({webwebcam: "ACK"}); // content.js backgroundMessageHandler throws an error without this
-            console.log(`tab ${sender.tab.id} open - ${sender.tab.url}`);
+            // console.log(`tab ${sender.tab.id} open - ${sender.tab.url}`);
         } else if (request.webwebcam === "needData") {
             let data = {webwebcam: {active: enabled, peerId: peerId}};
             sendResponse(data);
             console.log("sent this to content.js", data);
         } else {
             console.log(`message from tab ${sender.tab ? sender.tab.id : "undefined id"} on ${sender.tab ? sender.tab.url : "undefined url"}`, request);
+            // response required when content.js does `chrome.runtime.sendMessage` / sendToBackground
+            sendResponse({webwebcam: "ACK"});
         }
     });
 
@@ -237,15 +239,25 @@ async function handlePeerDisconnect(origConn) {
             window.standbyStream = await startStandby();
             await replaceTracks(window.standbyStream);
         }
+        peerState("closed");
 
-    } else if (origConn.page) {
+    } else if (origConn.page || origConn.peer.match(/-page/) ) {
         console.log(`page peer ${origConn.type} disconnected`, origConn);
         manualClose("page");
+
+        if (remoteCall && remoteCall.open){
+            peerState("call")
+        }
+        else{
+            console.log("remote call not detected");
+            peerState("closed");
+
+        }
     } else {
         // ToDo: bug here. This goes off when the remote disconnects. `origConn` doesn't contain .remote
         console.log("unrecognized peer", origConn)
+        // peerState("error");
     }
-    peerState("closed");
 
 }
 
@@ -255,6 +267,7 @@ async function handlePeerDisconnect(origConn) {
 // if timer is is exceeded send a message to remote with one last timer before disconnecting
 let pingTimeOut = false;
 async function pingHandler(conn){
+    conn.send("pong");
     if(pingTimeOut)
         clearTimeout(pingTimeOut);
     // wait for no ping
@@ -327,7 +340,7 @@ peer.on('connection', conn => {
 
             // peerjs bug prevents this from firing: https://github.com/peers/peerjs/issues/636
             pageCall.on('close', async () => {
-                console.log("call close event");
+                console.log("pageCall close event");
                 if(window.standbyStream){
                     stopStandbyStream(window.standbyStream);
                     window.standbyStream = false;

@@ -31,6 +31,9 @@ document.addEventListener('webwebcam-inject', async e => {
  */
 
 function backgroundMessageHandler(message) {
+    if(!message)
+        return;
+
     console.debug("webwebcam content: background.js message", message);
     if (!message) {
         console.info("webwebcam content: missing message from background.js", message);
@@ -47,6 +50,27 @@ function backgroundMessageHandler(message) {
     if (data === "ACK")
         return;
 
+
+    enabled = data.enabled === undefined ? enabled : data.enabled;
+    peerId = data.peerId === undefined ? peerId : data.peerId;
+    // let injectMessage = {peerId: peerId, enabled: enabled};
+    let injectMessage = data;
+
+    // Pass the updated info if changed in popup.js (communicated by background.js)
+    if (document.readyState === "complete") {
+        sendToInject(injectMessage);
+    }
+    // if the document isn't ready, wait for it
+    else {
+        document.addEventListener('DOMContentLoaded', () => {
+            // console.debug("DOMContentLoaded");
+            sendToInject(injectMessage);
+        });
+    }
+
+
+    // ToDo: Logic bad here
+    /*
     if (enabled !== data.enabled  || peerId !== data.peerId) {
         if (data.enabled) enabled = data.enabled;
         if (data.peerId) peerId = data.peerId;
@@ -65,6 +89,7 @@ function backgroundMessageHandler(message) {
         }
 
     }
+    */
 }
 
 function sendToBackground(message) {
@@ -108,7 +133,7 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
         .then(scriptText => {
             // set variables inside the script
 
-            scriptText = scriptText.replace(`const EXTENSION_ID = null`, `const EXTENSION_ID = "${chrome.runtime.id}"` )
+            scriptText = scriptText.replace(`const EXTENSION_ID = null`, `const EXTENSION_ID = "${chrome.runtime.id}"` );
 
             if (peerId !== null)
                 scriptText = scriptText.replace("let peerId", `let peerId = "${peerId}"`);
@@ -125,7 +150,7 @@ chrome.storage.local.get(['webwebcamPeerId', 'webwebcamEnabled'], async result =
                 document.head.removeChild(this)
             };
             // ToDo: add to head or body? append or prepend?
-            (document.head || document.documentElement).appendChild(script);
+            (document.head || document.documentElement).appendChild(script); //prepend
 
         })
         .catch(console.error);

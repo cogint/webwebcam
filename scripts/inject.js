@@ -38,6 +38,10 @@ function logger(...message) {
         console.debug('webwebcam inject: ', JSON.stringify(message.flat()));
 }
 
+function extlog(message){
+    document.dispatchEvent(new CustomEvent('webwebcam-inject', {detail: {message: message}}));
+}
+
 
 /*
  * Start peer.js code
@@ -207,6 +211,8 @@ async function shimGetUserMedia(constraints) {
 
         return origGetUserMedia(origConstraints)
     }
+
+    extlog("webwebcam in getUserMedia");
 
     // Add extStream tracks to the supplied stream
     async function swapTracks(stream) {
@@ -394,6 +400,7 @@ function enumDevicesShim() {
                 // await connectPeer();
 
                 // logger("enumerateDevices shim");
+                extlog("enumerateDevices shim");
 
                 // ToDo: verify proper behavior if there are no browser permissions
                 // Skip if there are no permissions
@@ -514,33 +521,28 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('webwebcam-content', e => {
     logger('content.js event data', e.detail);
 
-    if (e.detail.enabled) {
+    if (e.detail.enabled !== undefined) {
         // let setEnabled = e.detail.active === "active";
-        let enabledState = e.detail.enabled;
+        let newEnabledState = e.detail.enabled;
 
-        let currentPhonecamEnabled = appEnabled;
-
-        appEnabled = enabledState; // === "enabled";
-
-        if (currentPhonecamEnabled === appEnabled) {
+        if (newEnabledState === appEnabled) {
             logger(`No change to enabled state. It is still ${appEnabled}`);
             return
         }
 
+        appEnabled = newEnabledState;
         logger(`appEnabled is now ${appEnabled}`);
 
 
         /*
          * Disable
          */
-        if (appEnabled && enabledState === "disabled") {
+        if (appEnabled === false) {
             logger("ending any connection and disabling shims");
 
             if (peer) {
                 disconnect();
             }
-
-            appEnabled = false;
 
             /*
             if (extStream.enabled){
@@ -562,19 +564,22 @@ document.addEventListener('webwebcam-content', e => {
 
             return
         }
-
         /*
          * Enable
          */
-        if (appEnabled === false && enabledState) { //=== "enabled") {
+        else if(appEnabled === true){
+
             logger("enabling shims");
             shimGum();
             navigator.mediaDevices.enumerateDevices = enumDevicesShim;
 
+            let fakeDeviceChange = new Event("devicechange");
+            navigator.mediaDevices.dispatchEvent(fakeDeviceChange);
+            logger("devicechange event dispatched");
         }
-
-        let fakeDeviceChange = new Event("devicechange");
-        navigator.mediaDevices.dispatchEvent(fakeDeviceChange);
+        else{
+            logger("ERROR: invalid enabled state: ", appEnabled );
+        }
 
     }
 

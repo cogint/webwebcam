@@ -126,11 +126,19 @@ document.addEventListener('keydown', e=>{
 
 });
 
-
 if(backgroundWindow.state !== "paused" && backgroundWindow.activeStream && backgroundWindow.activeStream.active){
     previewVideo.srcObject = backgroundWindow.activeStream;
 }
 
+// This gets hung up for some reason sometimes when the cam changes, so set it to poll
+setInterval(()=>{
+    if(!previewVideo.srcObject){
+        let backgroundWindow = chrome.extension.getBackgroundPage();
+        if(backgroundWindow.state !== "paused" && backgroundWindow.activeStream && backgroundWindow.activeStream.active){
+            previewVideo.srcObject = backgroundWindow.activeStream;
+        }
+    }
+}, 500);
 
 
 /**

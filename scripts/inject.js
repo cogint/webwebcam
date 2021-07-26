@@ -501,6 +501,18 @@ if (appEnabled)
     navigator.mediaDevices.enumerateDevices = enumDevicesShim;
 
 
+/*
+//for debugging
+const origOnDeviceChange = navigator.mediaDevices.ondevicechange;
+
+function deviceChangeShim(event){
+    logger("devicechange event", event);
+    return origOnDeviceChange
+}
+navigator.mediaDevices.ondevicechange = deviceChangeShim;
+ */
+
+
 window.addEventListener('beforeunload', () => {
 //    window.removeEventListener('message', {passive: true});
 
@@ -554,13 +566,15 @@ document.addEventListener('webwebcam-content', e => {
              */
 
             // Reset gUM
-            // navigator.mediaDevices.getUserMedia = origGetUserMedia;
             shimActive = false;
+            navigator.mediaDevices.getUserMedia = origGetUserMedia;
 
             // reset enumerateDevices
-            // navigator.mediaDevices.enumerateDevices = origEnumerateDevices;
+            navigator.mediaDevices.enumerateDevices = origEnumerateDevices;
 
-            logger("sent devicechange event");
+
+            navigator.mediaDevices.dispatchEvent(new Event("devicechange"));
+            logger("devicechange event dispatched to remove webwebcam");
 
             return
         }
@@ -573,9 +587,9 @@ document.addEventListener('webwebcam-content', e => {
             shimGum();
             navigator.mediaDevices.enumerateDevices = enumDevicesShim;
 
-            let fakeDeviceChange = new Event("devicechange");
-            navigator.mediaDevices.dispatchEvent(fakeDeviceChange);
-            logger("devicechange event dispatched");
+            // let fakeDeviceChange =;
+            navigator.mediaDevices.dispatchEvent( new Event("devicechange") );
+            logger("devicechange event dispatched to add webwebcam");
         }
         else{
             logger("ERROR: invalid enabled state: ", appEnabled );

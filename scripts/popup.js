@@ -41,7 +41,7 @@ document.getElementById('qr').appendChild(qr.domElement);
  */
 
 // ToDo: redo in jquery
-let button = document.getElementById('newQr');
+let newQrButton = document.getElementById('newQr');
 let idText = document.getElementById('peerIdText');
 
 let enabledCheckbox = document.getElementById('enabledCheckbox');
@@ -94,7 +94,7 @@ if(!backgroundWindow.peerId){
      */
 }
 
-button.onclick = ()=> updateId();
+newQrButton.onclick = ()=> updateId();
 
 /*
 copyLink.onclick = async () => {

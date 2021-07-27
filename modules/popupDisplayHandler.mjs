@@ -25,7 +25,6 @@ export function popupDisplayHandler(state, context = window) {
             context.statusMessage.innerText = "Remote stream available";
             context.qrInfo.classList.add('d-none');
             context.preview.classList.remove('d-none');
-
             break;
         case "paused":
             context.statusMessage.innerText = "Remote stream paused";
@@ -34,13 +33,13 @@ export function popupDisplayHandler(state, context = window) {
             break;
         // ToDo: implement this state elsewhere
         case "disabled":
-            context.statusMessage.innerText = "webwebcam disabled";
+            context.statusMessage.innerText = "WebWebCam disabled. Click to enable";
             context.qrInfo.classList.add('d-none');
             context.preview.classList.add('d-none');
             break;
         default:
             context.statusMessage.innerText = "Error: unhandled state";
-            console.error("uncovered state in popupDisplayHandler", state)
+            console.error("Uncovered state in popupDisplayHandler", state)
     }
 }
 

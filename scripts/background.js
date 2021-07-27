@@ -5,6 +5,111 @@ import {peerState} from "../modules/popupDisplayHandler.mjs"
 // ToDo: Environment variables
 const AUDIO_ENABLED = false;
 
+let remoteCall, pageCall; // holders for call objects
+
+
+/**
+ * Initialization
+ */
+
+// Establish the peerId
+let peerId = localStorage.getItem("peerId");
+
+if (peerId) {
+    window.peerId = peerId;
+    console.log(`peerId loaded: ${peerId}`);
+    chrome.storage.local.set({'webwebcamPeerId': peerId}, () => {
+    });
+} else {
+    newId(true)
+}
+
+// Check enabled status
+
+let enabled = JSON.parse(localStorage.getItem("enabled"));
+// default to on if not set
+if(enabled === null){
+    enabled = true;
+    console.log("set storage");
+    localStorage.setItem("enabled", enabled);
+    chrome.storage.local.set({'webwebcamEnabled': enabled}, () => {
+    });
+}
+console.log(`Initial load - enabled is set to ${enabled}`);
+window.enabled = enabled;
+
+
+// if (enabled !== undefined) {
+
+    /*
+    enabledChange(enabled).catch(err=>console.error(err));
+} else {
+    // Default to enabled
+    enabledChange(true).catch(err=>console.error(err));
+}
+*/
+
+
+/**
+ * Shared functions with popup.js
+ */
+
+// Shared popus.js vars
+
+// These should be reassigned when the pop-up opens
+window.statusMessage = document.createElement('span');
+window.qrInfo = document.createElement('div');
+window.preview = document.createElement('div');
+window.activeVideo = document.createElement('video');
+window.previewVideo = document.createElement('video');
+
+
+window.statusMessage.innerText = "initializing";
+
+
+// Make this global for the pop-up
+window.newId = function newId() {
+    peerId = generateId(14); // originally was 20
+    localStorage.setItem("peerId", peerId); // localStorage for easier debugging?
+    chrome.storage.local.set({'webwebcamPeerId': peerId}, () => { // chrome.storage.local for sharing with content.js
+    });
+    window.peerId = peerId;
+    console.log(`new peerId generated: ${peerId}`);
+    sendToTabs({peerId: peerId});
+    return peerId
+};
+
+// Enable/disable the extension from the pop-up
+window.enabledChange = async function enabledChange(state) {
+    console.log(`Enabled set to ${state}`);
+    localStorage.setItem("enabled", state);
+    chrome.storage.local.set({'webwebcamEnabled': state}, () => {
+    });
+    window.enabled = state;
+    sendToTabs({enabled: state});
+    peerState(state ? "waiting" : "disabled");
+
+    if(state === false) {
+        await disconnectAll()
+    }
+};
+
+// Update the current tab ID for comms if the popup is opened
+window.popupOpen = function popupOpen() {
+    chrome.tabs.query({active: true, currentWindow: true}, tabs => {
+        console.log(`popup opened on tab ${tabs[0].id}`);
+        lastActiveTabId = tabs[0].id;
+    });
+};
+
+window.peerState = peerState;
+
+if(enabled)
+    peerState("waiting");
+else
+    peerState("disabled");
+
+
 /**
  * Content.js communication
  */
@@ -48,84 +153,7 @@ function sendToTabs(message) {
 }
 
 
-/**
- * Shared functions with popup.js
- */
 
-// Shared popus.js vars
-
-// These should be reassigned when the pop-up opens
-window.statusMessage = document.createElement('span');
-window.qrInfo = document.createElement('div');
-window.preview = document.createElement('div');
-window.activeVideo = document.createElement('video');
-window.previewVideo = document.createElement('video');
-
-
-// window.statusMessage.innerText = "uninitialized";
-
-
-// Make this global for the pop-up
-window.newId = function newId() {
-    peerId = generateId(14); // originally was 20
-    localStorage.setItem("peerId", peerId);
-    chrome.storage.local.set({'webwebcamPeerId': peerId}, () => {
-    });
-    window.peerId = peerId;
-    console.log(`new peerId generated: ${peerId}`);
-    sendToTabs({peerId: peerId});
-    return peerId
-};
-
-// Enable/disable the extension from the pop-up
-window.enabledChange = function enabledChange(state) {
-    console.log(`Enabled set to ${state}`);
-    localStorage.setItem("enabled", state);
-    chrome.storage.local.set({'webwebcamEnabled': state}, () => {
-    });
-    window.enabled = state;
-    sendToTabs({enabled: state});
-};
-
-// Update the current tab ID for comms if the popup is opened
-window.popupOpen = function popupOpen() {
-    chrome.tabs.query({active: true, currentWindow: true}, tabs => {
-        console.log(`popup opened on tab ${tabs[0].id}`);
-        lastActiveTabId = tabs[0].id;
-    });
-};
-
-window.peerState = peerState;
-window.state = "disconnected";
-
-/**
- * Initialization
- */
-
-// Establish the peerId
-let peerId = localStorage.getItem("peerId");
-
-if (peerId) {
-    window.peerId = peerId;
-    console.log(`peerId loaded: ${peerId}`);
-    chrome.storage.local.set({'webwebcamPeerId': peerId}, () => {
-    });
-} else {
-    newId(true)
-}
-
-// Check enabled status
-
-let enabled = JSON.parse(localStorage.getItem("enabled"));
-console.log(`enabled is set to ${enabled}`);
-if (enabled !== null) {
-    window.enabled = enabled;
-    chrome.storage.local.set({'webwebcamEnabled': enabled}, () => {
-    });
-} else {
-    // Default to enabled
-    enabledChange(true, true)
-}
 
 /**
  * stream variables
@@ -155,9 +183,6 @@ async function startStandby(){
  * peer.js setup
  */
 
-
-
-let remoteCall, pageCall; // holders for call objects
 
 let peer = new Peer(`${peerId}-ext`, {debug: 0});
 // for debugging
@@ -245,11 +270,12 @@ async function handlePeerDisconnect(origConn) {
         console.log(`page peer ${origConn.type} disconnected`, origConn);
         manualClose("page");
 
+
         if (remoteCall && remoteCall.open){
             peerState("call")
         }
         else{
-            console.log("remote call not detected");
+            console.log("page disconnected and remote call not detected - shutting down");
             peerState("closed");
 
         }
@@ -260,6 +286,17 @@ async function handlePeerDisconnect(origConn) {
     }
 
 }
+
+// Disconnect the page, remote, adn standby stream based on global objects
+async function disconnectAll(){
+    if(remoteCall && remoteCall.open)
+        await handlePeerDisconnect(remoteCall);
+    if(pageCall && pageCall.open)
+        await handlePeerDisconnect(pageCall);
+    if(window.standbyStream && window.standbyStream.active)
+        stopStandbyStream(window.standbyStream);
+}
+
 
 // ToDo: make this a class and handle the page connection too
 
@@ -287,7 +324,7 @@ async function pingHandler(conn){
 
 
 peer.on('open', async id => {
-    peerState("waiting");
+    peerState(enabled ? "waiting" : "disabled");
     console.log(`My peer ID is ${id}. Waiting for connections`);
 });
 
@@ -494,4 +531,3 @@ function streamChecker(){
         }, 500);
     }
 }
-

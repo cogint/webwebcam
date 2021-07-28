@@ -252,6 +252,7 @@ async function handlePeerDisconnect(origConn) {
                 }
             });
         }
+
     }
 
     // manage the difference between a page and remote
@@ -264,7 +265,10 @@ async function handlePeerDisconnect(origConn) {
             window.standbyStream = await startStandby();
             await replaceTracks(window.standbyStream);
         }
+        // Stop any remote stream tracks
+        window.remoteStream.getTracks().forEach(track=>track.stop());
         peerState("closed");
+
 
     } else if (origConn.page || origConn.peer.match(/-page/) ) {
         console.log(`page peer ${origConn.type} disconnected`, origConn);
@@ -436,14 +440,14 @@ peer.on('connection', conn => {
 // ToDo: switch to disabled?
 peer.on('close', (e) => {
     handleServerDisconnect(e);
-    peerState("disconnected");
+    // peerState("disconnected");
 });
 
 //
 peer.on('disconnected', (e) => {
-    console.log("Disconnected from signaling server");
+    // console.log("Disconnected from signaling server");
     handleServerDisconnect(e);
-    peerState("disconnected");
+    //peerState("disconnected");
     peer.reconnect()
 });
 
@@ -469,8 +473,8 @@ peer.on('call', call => {
         if (pageCall && pageCall.open)
             await replaceTracks(stream);
 
-        peerState("call");
-        streamChecker();
+        let callState = peerState("call");
+        streamChecker(callState);
 
         window.activeVideo.srcObject = stream; // pop-up
 
@@ -490,44 +494,57 @@ peer.on('call', call => {
 });
 
 
+/**
+ * Periodically make sure the remoteStream is decoding new frames, otherwise mark it as paused
+ */
+
 let streamCheckTimer;
-function streamChecker(){
-    //console.log(previewVideo.webkitDecodedFrameCount);
+function streamChecker(startState) {
     window.previewVideo.srcObject = window.activeStream;
 
-    let newState;
+    let newState = startState;
 
     let lastCount = activeVideo.webkitDecodedFrameCount;
-    if(lastCount < 1)
-        peerState("paused");
-    else {
-        streamCheckTimer = setInterval(() => {
-            // console.log(activeVideo.webkitDecodedFrameCount);
+    console.log(`streamChecker loaded: ${lastCount}`);
 
-            const currentState = peerState();
 
-            if (currentState !== "call" && currentState !== "paused") {
-                console.info(`Invalid streamChecker state: ${currentState}`);
-                clearInterval(streamCheckTimer);
-                return
-            }
+    streamCheckTimer = setInterval(() => {
 
-            let currentCount = activeVideo.webkitDecodedFrameCount;
-            if (lastCount === currentCount) {
-                newState = "paused";
+        const currentState = peerState();
 
-            } else {
-                newState = "call";
-            }
+        // This shouldn't happen: check for standby stream
+        if (window.activeStream === window.standbyStream && window.standbyStream !== null) {
+            clearInterval(streamCheckTimer);
+            console.error("streamChecker checking a standbyStream");
+            return
+        }
 
-            if(newState !== currentState){
-                peerState(newState);
-                window.previewVideo.srcObject = newState === "paused" ? null : window.activeStream;
 
-            }
+        // stop the streamChecker if anything not a call or paused
+        if (currentState !== "call" && currentState !== "paused") {
+            // console.info(`Invalid streamChecker state: ${currentState}`);
+            clearInterval(streamCheckTimer);
+            return
+        }
 
-            lastCount = currentCount;
+        let currentCount = activeVideo.webkitDecodedFrameCount;
+        // console.log(`current webkitDecodedFrameCount: ${currentCount}; last count: ${lastCount}`);
 
-        }, 500);
-    }
+        if (lastCount === currentCount) {
+            newState = "paused";
+        } else {
+            newState = "call";
+        }
+
+        // console.log(`new: ${newState}, current: ${currentState}`);
+        if (newState !== currentState) {
+            // console.log("stage change!!!");
+            peerState(newState);
+            window.previewVideo.srcObject = newState === "paused" ? null : window.activeStream;
+
+        }
+
+        lastCount = currentCount;
+
+    }, 500);
 }

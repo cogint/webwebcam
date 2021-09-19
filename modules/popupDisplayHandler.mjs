@@ -62,7 +62,7 @@ if (!window.state)
     window.state = "disconnected";
 
 
-export function peerState(state) {
+export function remoteState(state) {
     if (!state) {
         popupDisplayHandler(window.state);
         return window.state;
@@ -77,7 +77,7 @@ export function peerState(state) {
         console.log(`Updated peerState: ${state}`);
 
         // ToDo: rethink tab comms
-        // sendToTabs({peerState: state});
+        // sendToTabs({remoteState: state});
         popupDisplayHandler(state);
         window.state = state;
         return state

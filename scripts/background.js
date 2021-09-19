@@ -1,12 +1,12 @@
 import {getStandbyStream, stopStandbyStream} from "../modules/simStream.mjs";
 import {generateId} from "../modules/generateId.mjs";
-import {peerState} from "../modules/popupDisplayHandler.mjs"
+import {remoteState} from "../modules/popupDisplayHandler.mjs"
 
 // ToDo: Environment variables
 const AUDIO_ENABLED = false;
+const PEERJS_DEBUG_LEVEL = 0;
 
 let remoteCall, pageCall; // holders for call objects
-
 
 /**
  * Initialization
@@ -39,17 +39,6 @@ console.log(`Initial load - enabled is set to ${enabled}`);
 window.enabled = enabled;
 
 
-// if (enabled !== undefined) {
-
-    /*
-    enabledChange(enabled).catch(err=>console.error(err));
-} else {
-    // Default to enabled
-    enabledChange(true).catch(err=>console.error(err));
-}
-*/
-
-
 /**
  * Shared functions with popup.js
  */
@@ -62,10 +51,9 @@ window.qrInfo = document.createElement('div');
 window.preview = document.createElement('div');
 window.activeVideo = document.createElement('video');
 window.previewVideo = document.createElement('video');
-
-
 window.statusMessage.innerText = "initializing";
 
+window.remoteState = remoteState;
 
 // Make this global for the pop-up
 window.newId = function newId() {
@@ -85,12 +73,15 @@ window.enabledChange = async function enabledChange(state) {
     localStorage.setItem("enabled", state);
     chrome.storage.local.set({'webwebcamEnabled': state}, () => {
     });
-    window.enabled = state;
+    window.enabled = enabled = state;
     sendToTabs({enabled: state});
-    peerState(state ? "waiting" : "disabled");
 
     if(state === false) {
-        await disconnectAll()
+        await disconnectAll();
+        remoteState("disabled")
+    }
+    else {
+        remoteState("waiting")
     }
 };
 
@@ -102,12 +93,8 @@ window.popupOpen = function popupOpen() {
     });
 };
 
-window.peerState = peerState;
-
-if(enabled)
-    peerState("waiting");
-else
-    peerState("disabled");
+if(!enabled)
+    remoteState("disabled");
 
 
 /**
@@ -183,14 +170,13 @@ async function startStandby(){
  * peer.js setup
  */
 
-
-let peer = new Peer(`${peerId}-ext`, {debug: 0});
+let peer = new Peer(`${peerId}-ext`, {debug: PEERJS_DEBUG_LEVEL});
 // for debugging
 window.peer = peer;
 
 function handleServerDisconnect(e) {
     console.log("peer disconnected from server", e);
-    peerState("disconnected");
+    remoteState("disconnected");
     peer.reconnect();
 }
 
@@ -218,11 +204,10 @@ async function replaceTracks(stream) {
         } else console.log(`no audioSender in pageCall: ${pageCall.connectionId}`);
     }
 
-
 }
 
 async function handlePeerDisconnect(origConn) {
-    console.log(origConn);
+    // console.log(origConn);
 
     if(origConn.closing){
         console.log("handlePeerDisconnect - conn already closed");
@@ -243,7 +228,8 @@ async function handlePeerDisconnect(origConn) {
                 // Manually close the peerConnections b/c peerJs MediaConnect close not called bug: https://github.com/peers/peerjs/issues/636
                 if (conn.peer.includes(type)) {
                     console.log(`closing ${conn.connectionId} peerConnection (${index + 1}/${array.length})`, conn.peerConnection);
-                    conn.peerConnection.close();
+                    if(conn.peerConnection)
+                        conn.peerConnection.close();
 
                     // close it using peerjs methods
                     if (conn.close) {
@@ -267,7 +253,7 @@ async function handlePeerDisconnect(origConn) {
         }
         // Stop any remote stream tracks
         window.remoteStream.getTracks().forEach(track=>track.stop());
-        peerState("closed");
+        remoteState("closed");
 
 
     } else if (origConn.page || origConn.peer.match(/-page/) ) {
@@ -276,22 +262,22 @@ async function handlePeerDisconnect(origConn) {
 
 
         if (remoteCall && remoteCall.open){
-            peerState("call")
+            remoteState("call")
         }
         else{
             console.log("page disconnected and remote call not detected - shutting down");
-            peerState("closed");
+            remoteState("closed");
 
         }
     } else {
         // ToDo: bug here. This goes off when the remote disconnects. `origConn` doesn't contain .remote
         console.log("unrecognized peer", origConn)
-        // peerState("error");
+        // remoteState("error");
     }
 
 }
 
-// Disconnect the page, remote, adn standby stream based on global objects
+// Disconnect the page, remote, and standby stream based on global objects
 async function disconnectAll(){
     if(remoteCall && remoteCall.open)
         await handlePeerDisconnect(remoteCall);
@@ -299,6 +285,8 @@ async function disconnectAll(){
         await handlePeerDisconnect(pageCall);
     if(window.standbyStream && window.standbyStream.active)
         stopStandbyStream(window.standbyStream);
+    window.activeVideo.srcObject = null;
+    //peer.destroy();
 }
 
 
@@ -328,11 +316,18 @@ async function pingHandler(conn){
 
 
 peer.on('open', async id => {
-    peerState(enabled ? "waiting" : "disabled");
-    console.log(`My peer ID is ${id}. Waiting for connections`);
+    remoteState(enabled === false ? "disabled" : "waiting");
+    console.log(`My peer ID is ${id}. Open for connections`);
 });
 
+
 peer.on('connection', conn => {
+
+    // ToDo: properly handle peer disconnect logic
+    if(enabled===false){
+        console.log("Connection attempt while disabled", conn);
+        return
+    }
 
     console.log("connection:", conn);
 
@@ -342,7 +337,7 @@ peer.on('connection', conn => {
 
         if (conn.peer === `${peerId}-remote`) {
             conn.remote = true;
-            peerState("connected");
+            remoteState("connected");
 
         }
         // Setup outgoing call
@@ -369,7 +364,7 @@ peer.on('connection', conn => {
 
             pageCall = peer.call(`${peerId}-page`, window.activeStream);
             console.log(`started call to page`, pageCall);
-            peerState("call");
+            //remoteState("call");
 
 
             // ToDo: handle error conditions
@@ -417,14 +412,14 @@ peer.on('connection', conn => {
             if (data === "bye") {
                 console.log(`incoming bye event from ${conn.peer}`);
                 await handlePeerDisconnect(conn);
-                // peerState("closed");
+                // remoteState("closed");
             }
         });
 
         conn.on('close', async () => {
             console.log("conn close event");
             await handlePeerDisconnect(conn);
-            // peerState("closed")
+            // remoteState("closed")
         });
 
     });
@@ -440,19 +435,25 @@ peer.on('connection', conn => {
 // ToDo: switch to disabled?
 peer.on('close', (e) => {
     handleServerDisconnect(e);
-    // peerState("disconnected");
+    // remoteState("disconnected");
 });
 
 //
 peer.on('disconnected', (e) => {
     // console.log("Disconnected from signaling server");
     handleServerDisconnect(e);
-    //peerState("disconnected");
+    //remoteState("disconnected");
     peer.reconnect()
 });
 
 // Handle incoming call from remote
 peer.on('call', call => {
+
+    if(enabled===false){
+        console.log("Call attempt while disabled", call);
+        return
+    }
+
     console.log("incoming call", call);
     remoteCall = call;
 
@@ -463,20 +464,22 @@ peer.on('call', call => {
             return;
         }
 
+        remoteState("call");
+
         console.log(`remote stream ${stream.id}`);
 
         // Assume call is from remote.js for now
         window.activeStream = stream;
         window.remoteStream = stream; // for Debugging
 
+        window.activeVideo.srcObject = stream; // pop-up
+
         // swap out the standby stream if the pageCall is already connected
         if (pageCall && pageCall.open)
             await replaceTracks(stream);
 
-        let callState = peerState("call");
-        streamChecker(callState);
-
-        window.activeVideo.srcObject = stream; // pop-up
+        //let callState = remoteState("call");
+        streamChecker();
 
     });
 
@@ -486,7 +489,7 @@ peer.on('call', call => {
         console.log("call close event", call);
 
         // await handlePeerDisconnect(rem);
-        // peerState("closed");
+        // remoteState("closed");
     });
 
     call.answer();
@@ -494,15 +497,14 @@ peer.on('call', call => {
 });
 
 
-/**
- * Periodically make sure the remoteStream is decoding new frames, otherwise mark it as paused
- */
+// Periodically make sure the remoteStream is decoding new frames, otherwise mark it as paused
 
 let streamCheckTimer;
-function streamChecker(startState) {
+function streamChecker() {
     window.previewVideo.srcObject = window.activeStream;
 
-    let newState = startState;
+    // Assume state should be call
+    let newState = "call";
 
     let lastCount = activeVideo.webkitDecodedFrameCount;
     console.log(`streamChecker loaded: ${lastCount}`);
@@ -510,7 +512,7 @@ function streamChecker(startState) {
 
     streamCheckTimer = setInterval(() => {
 
-        const currentState = peerState();
+        const currentState = remoteState();
 
         // This shouldn't happen: check for standby stream
         if (window.activeStream === window.standbyStream && window.standbyStream !== null) {
@@ -520,7 +522,7 @@ function streamChecker(startState) {
         }
 
 
-        // stop the streamChecker if anything not a call or paused
+        // stop the streamChecker if anything not a call
         if (currentState !== "call" && currentState !== "paused") {
             // console.info(`Invalid streamChecker state: ${currentState}`);
             clearInterval(streamCheckTimer);
@@ -530,7 +532,7 @@ function streamChecker(startState) {
         let currentCount = activeVideo.webkitDecodedFrameCount;
         // console.log(`current webkitDecodedFrameCount: ${currentCount}; last count: ${lastCount}`);
 
-        if (lastCount === currentCount) {
+        if (lastCount === currentCount && lastCount > 0) {
             newState = "paused";
         } else {
             newState = "call";
@@ -539,7 +541,7 @@ function streamChecker(startState) {
         // console.log(`new: ${newState}, current: ${currentState}`);
         if (newState !== currentState) {
             // console.log("stage change!!!");
-            peerState(newState);
+            remoteState(newState);
             window.previewVideo.srcObject = newState === "paused" ? null : window.activeStream;
 
         }

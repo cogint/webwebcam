@@ -31,10 +31,6 @@ document.addEventListener('webwebcam-inject', async e => {
  */
 
 function backgroundMessageHandler(message) {
-    if(!message)
-        return;
-
-    console.debug("webwebcam content: background.js message", message);
     if (!message) {
         console.info("webwebcam content: missing message from background.js", message);
         return
@@ -43,6 +39,8 @@ function backgroundMessageHandler(message) {
         console.info("webwebcam content: Unrecognized message from background.js", message);
         return
     }
+
+    console.debug("webwebcam content: background.js message", message);
 
 
     let data = message.webwebcam;
@@ -69,7 +67,7 @@ function backgroundMessageHandler(message) {
     }
 
 
-    // ToDo: Logic bad here
+    // ToDo: Logic bad here{}, 
     /*
     if (enabled !== data.enabled  || peerId !== data.peerId) {
         if (data.enabled) enabled = data.enabled;
@@ -93,7 +91,9 @@ function backgroundMessageHandler(message) {
 }
 
 function sendToBackground(message) {
-    chrome.runtime.sendMessage({webwebcam: message}, backgroundMessageHandler);
+    // ToDo: see if this resolves "Uncaught (in promise) Error: Extension context invalidated."
+    if(chrome.runtime && chrome.runtime.sendMessage)
+        chrome.runtime.sendMessage({webwebcam: message}, backgroundMessageHandler);
 }
 
 // Get initialization data from background.js
